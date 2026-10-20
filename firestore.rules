@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only the two of you can read or change the food storage.
+    function family() {
+      return request.auth != null && request.auth.token.email.lower() in [
+        'shawn@spencerfam.com',
+        'WIFE_EMAIL_HERE'
+      ];
+    }
+    match /households/{h} {
+      allow read, write: if family();
+      match /{sub=**} {
+        allow read, write: if family();
+      }
+    }
+  }
+}

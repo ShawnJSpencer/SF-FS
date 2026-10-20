@@ -1,0 +1,42 @@
+name: Food Storage alerts & weekly list
+
+on:
+  schedule:
+    - cron: '7 * * * *'     # every hour (GitHub may run a few minutes late)
+  workflow_dispatch:
+    inputs:
+      force_report:
+        description: 'Send the shopping list right now'
+        type: boolean
+        default: true
+
+permissions:
+  actions: write            # lets the job keep its own schedule from being paused
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --omit=dev --no-audit --no-fund
+        working-directory: automation
+      - run: node notify.mjs
+        working-directory: automation
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          VAPID_PUBLIC: ${{ secrets.VAPID_PUBLIC }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          FORCE_REPORT: ${{ inputs.force_report }}
+      # GitHub pauses scheduled jobs after 60 days without repo activity; this keeps it awake.
+      - name: Keep schedule alive
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/alerts.yml/enable" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
