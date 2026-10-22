@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -251,8 +251,8 @@ async function goCloud() {
 function setSync(txt, on = false) { $('#syncState').innerHTML = `<span class="dot ${on ? 'on' : ''}"></span><span>${esc(txt)}</span>`; }
 
 /* ───────────── Home ───────────── */
-// Food & freezers A–Z, then Household, then Longterm (new categories slot in alphabetically).
-const LAST = ['household', 'longterm'];
+// Food & freezers A–Z, then Household, then Medicine, then Longterm (new categories slot in alphabetically).
+const LAST = ['household', 'medicine', 'longterm'];
 function catGroups() {
   const all = DB.meta.cats;
   const food = all.filter(c => !LAST.includes(c.id)).sort((a, b) => a.name.localeCompare(b.name));
