@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -131,14 +131,23 @@ const DB = {
     else SEED.items.forEach(i => this.items.set(i.id, clone(i)));
     this.persistLocal();
   },
+  // Quick-start copy for this device. Once synced, photos live in the shared
+  // database (and its offline cache), so this copy skips them to stay small.
   persistLocal() {
-    try { localStorage.setItem('sffs-local', JSON.stringify({ meta: this.meta, items: [...this.items.values()] })); }
-    catch { toast('This device is out of room — try smaller photos'); }
+    const items = [...this.items.values()];
+    const slim = this.mode === 'cloud' ? items.map(i => i.img?.startsWith('data:') ? { ...i, img: '', imgCloud: true } : i) : items;
+    try { localStorage.setItem('sffs-local', JSON.stringify({ meta: this.meta, items: slim, mode: this.mode })); }
+    catch { if (this.mode !== 'cloud') toast("This phone's storage is full — turn on Sync so photos can live in the cloud"); }
   },
   async saveItem(it) {
     it.updatedAt = Date.now(); it.updatedBy = this.user?.email || 'this device';
     this.items.set(it.id, it); this.persistLocal(); render();
-    if (this.mode === 'cloud') { const { doc, setDoc } = this.fb; await setDoc(doc(this.fb.db, this.path('items'), it.id), it).catch(syncErr); }
+    if (this.mode === 'cloud') {
+      const { doc, setDoc } = this.fb, ref = doc(this.fb.db, this.path('items'), it.id);
+      // never blank out a synced photo just because this device's quick-start copy didn't hold it
+      if (it.imgCloud && !it.img) { const { img, imgCloud, ...rest } = it; await setDoc(ref, rest, { merge: true }).catch(syncErr); }
+      else { delete it.imgCloud; await setDoc(ref, it).catch(syncErr); }
+    }
   },
   async deleteItem(id) {
     this.items.delete(id); this.persistLocal(); render();
@@ -194,8 +203,16 @@ async function goCloud() {
         await b.commit();
       }
       toast('Our storage is now synced ✿');
-    } else if (!(await getDoc(doc(db, DB.path()))).exists()) {
-      await DB.fb.setDoc(doc(db, DB.path()), DB.meta, { merge: true });
+    } else {
+      // Anything changed on this device before signing in (photos, barcodes, counts) gets sent up,
+      // unless the shared copy was changed more recently.
+      const cloud = new Map(existing.docs.map(d => [d.id, d.data()]));
+      const newer = [...DB.items.values()].filter(it => it.updatedAt && !it.imgCloud && (!cloud.has(it.id) || (cloud.get(it.id).updatedAt || 0) < it.updatedAt));
+      for (let i = 0; i < newer.length; i += 400) {
+        const b = writeBatch(db); newer.slice(i, i + 400).forEach(it => b.set(doc(db, DB.path('items'), it.id), it)); await b.commit();
+      }
+      if (newer.length) toast(`Sent ${newer.length} change${newer.length === 1 ? '' : 's'} from this device ✿`);
+      if (!(await getDoc(doc(db, DB.path()))).exists()) await DB.fb.setDoc(doc(db, DB.path()), DB.meta, { merge: true });
     }
   } catch (e) { console.error(e); setSync('no access'); toast("This account isn't allowed in — check SETUP.md step 3"); return; }
   DB.mode = 'cloud';
