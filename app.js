@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -122,7 +122,15 @@ function dropKind(x, code) { x.codes = (x.codes || []).filter(c => c !== code); 
 const ownerOf = code => [...DB.items.values()].find(i => (i.codes || []).some(c => normCode(c) === code));
 const normCode = c => { c = String(c).trim(); return /^\d{12}$/.test(c) ? '0' + c : c; };
 const flowerPH = `<svg viewBox="0 0 24 24" fill="currentColor"><g opacity=".9">${[0, 72, 144, 216, 288].map(a => `<ellipse cx="12" cy="6.5" rx="3.2" ry="4.6" transform="rotate(${a} 12 12)"/>`).join('')}</g><circle cx="12" cy="12" r="2.6" fill="#f6d36b"/></svg>`;
-const pic = (it, cls = 'thumb') => it.img ? `<img class="${cls}" src="${esc(it.img)}" alt="" loading="lazy">` : `<div class="${cls} ph">${flowerPH}</div>`;
+// Which picture to show: the package of the batch that expires first (its kind's photo),
+// otherwise the item's main photo.
+const kindName = (it, code) => code ? ((it.kinds || {})[code]?.name || '') : '';
+function showImg(it) {
+  const first = sortLots(it.lots)[0];
+  const k = first?.code && (it.kinds || {})[first.code];
+  return (k && k.img) || it.img || '';
+}
+const pic = (it, cls = 'thumb') => showImg(it) ? `<img class="${cls}" src="${esc(showImg(it))}" alt="" loading="lazy">` : `<div class="${cls} ph">${flowerPH}</div>`;
 
 /* ───────────── Data store (local or Firebase) ───────────── */
 const DEFAULT_META = () => ({
@@ -144,7 +152,15 @@ const DB = {
   // database (and its offline cache), so this copy skips them to stay small.
   persistLocal() {
     const items = [...this.items.values()];
-    const slim = this.mode === 'cloud' ? items.map(i => i.img?.startsWith('data:') ? { ...i, img: '', imgCloud: true } : i) : items;
+    const slim = this.mode !== 'cloud' ? items : items.map(i => {
+      let o = i;
+      if (i.img?.startsWith('data:')) o = { ...o, img: '', imgCloud: true };
+      if (Object.values(i.kinds || {}).some(k => k.img?.startsWith('data:'))) {
+        const kinds = {}; for (const [c, k] of Object.entries(i.kinds)) { const { img, ...rest } = k; kinds[c] = img?.startsWith('data:') ? rest : k; }
+        o = { ...o, kinds, imgCloud: true };
+      }
+      return o;
+    });
     try { localStorage.setItem('sffs-local', JSON.stringify({ meta: this.meta, items: slim, mode: this.mode })); }
     catch { if (this.mode !== 'cloud') toast("This phone's storage is full — turn on Sync so photos can live in the cloud"); }
   },
@@ -154,7 +170,7 @@ const DB = {
     if (this.mode === 'cloud') {
       const { doc, setDoc } = this.fb, ref = doc(this.fb.db, this.path('items'), it.id);
       // never blank out a synced photo just because this device's quick-start copy didn't hold it
-      if (it.imgCloud && !it.img) { const { img, imgCloud, ...rest } = it; await setDoc(ref, rest, { merge: true }).catch(syncErr); }
+      if (it.imgCloud) { const { imgCloud, ...rest } = it; if (!rest.img) delete rest.img; await setDoc(ref, rest, { merge: true }).catch(syncErr); }
       else { delete it.imgCloud; await setDoc(ref, it).catch(syncErr); }
     }
   },
@@ -353,6 +369,7 @@ function openItem(id, preset = {}) {
                   : clone(DB.items.get(id));
   if (!d) return;
   if (isNew && !d.lots.length) d.lots.push({ id: uid('l'), exp: '', qty: 1 });
+  d.lots.sort((x, y) => (expDate(x.exp) || 9e15) - (expDate(y.exp) || 9e15));   // soonest first, like the picture
   const body = openSheet(`
     <div class="hero">
       <button class="picwrap" id="pickPic">${d.img ? `<img class="pic" src="${esc(d.img)}">` : `<div class="pic ph">${flowerPH}</div>`}<small>${d.img ? 'change' : 'add photo'}</small></button>
@@ -376,7 +393,7 @@ function openItem(id, preset = {}) {
       <label class="field"><span>Brand / size</span><input id="fBrand" value="${esc(d.brand || '')}"></label>
     </div>
     <div class="sec-title" style="color:var(--ink);margin-top:20px">Kinds we buy</div>
-    <p class="note" style="margin:0 0 4px">Every barcode here counts as this item, so different flavors or brands all land in one place.</p>
+    <p class="note" style="margin:0 0 4px">Every barcode here counts as this item, so different flavors or brands all land in one place. Tap a picture to change it. The list shows the picture of whichever kind expires first.</p>
     <div id="fKinds"></div>
     <div class="acts" style="justify-content:flex-start;gap:24px;margin-top:8px">
       <button class="link flourish" id="fScanKind">scan another kind</button><button class="link mute" id="fTypeKind">type a barcode</button></div>
@@ -393,7 +410,9 @@ function openItem(id, preset = {}) {
       return `<div class="lot"><span class="when ${n <= SOON ? 'soon' : ''}">
         <input type="month" value="${/^\d{4}-\d{2}$/.test(l.exp) ? l.exp : ''}" data-exp="${i}" style="border:0;background:none;font-weight:600;font-size:16px;padding:0;max-width:170px" ${/^\d{4}$/.test(l.exp) ? 'class="hidden"' : ''}>
         ${/^\d{4}$/.test(l.exp) ? `<b>${l.exp}</b> <button class="link mute" data-yr="${i}" style="font-size:12px">change</button>` : ''}
-        <small>${l.exp ? (fmtLeft(l.exp) || 'expires ' + fmtExp(l.exp)) : 'no date — tap to set'}</small></span>
+        <small>${l.exp ? (fmtLeft(l.exp) || 'expires ' + fmtExp(l.exp)) : 'no date — tap to set'}</small>
+        ${kindsOf(d).length ? `<select data-lkind="${i}" style="border:0;background:none;color:var(--accent);font-size:13px;font-weight:700;padding:0;max-width:190px;-webkit-appearance:none;appearance:none">
+          <option value="">which kind? ▾</option>${kindsOf(d).map((k, j) => `<option value="${esc(k.code)}" ${k.code === l.code ? 'selected' : ''}>${esc(k.name || 'Kind ' + (j + 1))} ▾</option>`).join('')}</select>` : ''}</span>
         <span class="step"><button data-m="${i}">−</button><b>${l.qty}</b><button data-p="${i}">+</button></span></div>`; }).join('')
       : `<p class="note">None on the shelf right now.</p>`;
     const q = lots.reduce((a, l) => a + (+l.qty || 0), 0);
@@ -406,7 +425,10 @@ function openItem(id, preset = {}) {
     if (p != null) { d.lots[p].qty++; drawLots(); }
     if (yr != null) { d.lots[yr].exp = ''; drawLots(); }
   });
-  body.addEventListener('change', e => { const i = e.target.dataset.exp; if (i != null) { d.lots[i].exp = e.target.value; drawLots(); } });
+  body.addEventListener('change', e => {
+    const i = e.target.dataset.exp; if (i != null) { d.lots[i].exp = e.target.value; drawLots(); }
+    const j = e.target.dataset.lkind; if (j != null) { if (e.target.value) d.lots[j].code = e.target.value; else delete d.lots[j].code; drawLots(); }
+  });
   wireShelves($('#fShelves', body), () => d.loc, v => { d.loc = v; drawLots(); });
   $('#fAddLot', body).onclick = () => { d.lots.push({ id: uid('l'), exp: '', qty: 1 }); drawLots(); };
   $('#fPar', body).oninput = e => { d.par = Math.max(0, +e.target.value || 0); drawLots(); };
@@ -424,13 +446,18 @@ function openItem(id, preset = {}) {
   const drawKinds = () => {
     const ks = kindsOf(d);
     $('#fKinds', body).innerHTML = ks.length ? `<div class="lots">${ks.map(k => `<div class="lot">
-      ${k.img ? `<img class="thumb" src="${esc(k.img)}" alt="" style="width:40px;height:40px">` : `<div class="thumb ph" style="width:40px;height:40px">${flowerPH}</div>`}
+      <button data-kpic="${esc(k.code)}" aria-label="Change this kind's picture" style="flex:none">${k.img ? `<img class="thumb" src="${esc(k.img)}" alt="" style="width:40px;height:40px;pointer-events:none">` : `<div class="thumb ph" style="width:40px;height:40px;pointer-events:none">${flowerPH}</div>`}</button>
       <span class="when" style="min-width:0"><input data-kname="${esc(k.code)}" value="${esc(k.name || '')}" placeholder="name this kind, like Blueberry"
         style="border:0;background:none;font-weight:600;font-size:15px;padding:0;width:100%;outline:none"><small>${esc(k.code)}</small></span>
       <button class="link mute" data-rmkind="${esc(k.code)}" aria-label="Remove this barcode" style="font-size:22px;padding:0 4px">×</button></div>`).join('')}</div>`
       : `<p class="note">No barcodes yet. Scan one and it'll show up here.</p>`;
+    if (kindsOf(d).length) $('#fKindTip', body)?.classList.remove('hidden');
   };
   drawKinds();
+  body.addEventListener('click', e => { const c = e.target.dataset?.kpic; if (c == null) return;
+    const k = (d.kinds || {})[c] || {};
+    choosePhoto(`${d.name} ${k.name || ''}`.trim(), url => { collect(); d.kinds = { ...(d.kinds || {}) }; d.kinds[c] = { ...(d.kinds[c] || {}), img: url }; drawKinds(); drawLots(); }, e.target.closest('.lot'));
+  });
   body.addEventListener('click', e => { const c = e.target.dataset?.rmkind; if (c == null) return;
     collect(); dropKind(d, c); drawKinds(); toast('Barcode removed (tap Save to keep it that way)'); });
   // scanning or typing a kind saves what's on screen first, then comes back here
@@ -442,11 +469,15 @@ function openItem(id, preset = {}) {
     if (!collect()) return;
     await DB.saveItem(d); closeSheet(); toast(isNew ? 'Added ✿' : 'Saved ✿');
   };
-  if (isNew && !d.name) setTimeout(() => $('#fName', body).focus(), 350);
+  if (isNew && !d.name) setTimeout(() => $('#fName', body)?.focus(), 350);
 }
 function mergeLots(lots) {
   const m = new Map();
-  for (const l of lots) { if (!(l.qty > 0)) continue; const k = l.exp || ''; m.has(k) ? (m.get(k).qty += l.qty) : m.set(k, { id: l.id || uid('l'), exp: k, qty: l.qty }); }
+  for (const l of lots) {
+    if (!(l.qty > 0)) continue; const k = (l.exp || '') + '|' + (l.code || '');
+    if (m.has(k)) m.get(k).qty += l.qty;
+    else m.set(k, { id: l.id || uid('l'), exp: l.exp || '', qty: l.qty, ...(l.code ? { code: l.code } : {}) });
+  }
   return [...m.values()];
 }
 
@@ -463,14 +494,14 @@ function shrink(file, max = 420) {
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); res(c.toDataURL('image/jpeg', .72)); };
     img.src = URL.createObjectURL(file); });
 }
-function choosePhoto(name, cb, inline) {
+function choosePhoto(name, cb, anchor) {
   const pop = document.createElement('div');
   pop.className = 'choice';
   pop.innerHTML = `<button class="link big" data-a="file">Take or choose a photo</button>
     <button class="link big" data-a="url">Paste a picture link<small>long-press a picture online → Copy Image Address</small></button>
     <button class="link big" data-a="web">Find one online<small>opens a picture search for “${esc(name || 'this')}”</small></button>`;
-  const host = $('#sheetBody .hero');
-  const old = $('#sheetBody .choice.photo'); if (old) return old.remove();
+  const host = anchor instanceof Element ? anchor : $('#sheetBody .hero');
+  const old = $('#sheetBody .choice.photo'); if (old) { const same = old.previousElementSibling === host; old.remove(); if (same) return; }
   pop.classList.add('photo'); host.after(pop);
   pop.onclick = e => { const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
     if (a === 'file') { filePickCb = u => { cb(u); pop.remove(); }; $('#filePick').click(); }
@@ -483,9 +514,13 @@ function choosePhoto(name, cb, inline) {
 function heroHTML(it, line) {
   return `<div class="hero">${pic(it, 'pic')}<div><h2>${esc(it.name)}</h2><p class="sub">${line}</p></div></div>`;
 }
-function openPutAway(id, qtyDefault = 1) {
+function openPutAway(id, qtyDefault = 1, code = '') {
   const it = DB.items.get(id); let qty = qtyDefault, loc = it.loc || '';
-  const body = openSheet(`${heroHTML(it, `${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}`)}
+  const ks = kindsOf(it);
+  const kindPic = code && (it.kinds || {})[code]?.img;
+  const body = openSheet(`<div class="hero">${kindPic ? `<img class="pic" src="${esc(kindPic)}" alt="">` : pic(it, 'pic')}<div><h2>${esc(it.name)}</h2>
+      <p class="sub">${kindName(it, code) ? esc(kindName(it, code)) + ' · ' : ''}${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}</p></div></div>
+    ${!code && ks.length > 1 ? `<label class="field"><span>Which kind</span><select id="paKind"><option value="">not sure</option>${ks.map((k, j) => `<option value="${esc(k.code)}">${esc(k.name || 'Kind ' + (j + 1))}</option>`).join('')}</select></label>` : ''}
     <div class="cols">
       <label class="field"><span>Expires</span><input type="month" id="paExp"></label>
       <div class="field"><span>How many</span><div class="step" style="padding-top:6px"><button id="paM">−</button><b id="paQ">${qty}</b><button id="paP">+</button></div></div>
@@ -501,17 +536,18 @@ function openPutAway(id, qtyDefault = 1) {
   $('#paCancel', body).onclick = closeSheet;
   $('#paGo', body).onclick = async () => {
     const exp = $('#paExp', body).value;
-    await DB.mutate(id, x => { x.lots = mergeLots([...(x.lots || []), { exp, qty }]); if (loc) x.loc = loc; });
+    const kc = code || $('#paKind', body)?.value || (ks.length === 1 ? ks[0].code : '');
+    await DB.mutate(id, x => { x.lots = mergeLots([...(x.lots || []), { exp, qty, ...(kc ? { code: kc } : {}) }]); if (loc) x.loc = loc; });
     closeSheet(); toast(`Tucked away ✿ ${loc ? 'on ' + loc : ''}`);
   };
 }
-function openTakeOut(id) {
+function openTakeOut(id, code = '') {
   const it = DB.items.get(id), lots = sortLots(it.lots);
   if (!lots.length) return toast(`No ${it.name} on the shelf`);
   const o = lots[0], n = daysLeft(o.exp);
   const body = openSheet(`${heroHTML(it, `${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}`)}
     <h2 style="font-size:22px">Did you grab the oldest one?</h2>
-    <p class="sub">${o.exp ? `The soonest one expires <b style="color:${n <= SOON ? 'var(--warn)' : 'var(--ink)'}">${fmtExp(o.exp)}</b>${fmtLeft(o.exp) ? ' — ' + fmtLeft(o.exp) : ''}${o.qty > 1 ? ` (${o.qty} of those)` : ''}.` : 'No date on this one.'}</p>
+    <p class="sub">${kindName(it, o.code) ? `It's the <b>${esc(kindName(it, o.code))}</b>. ` : ''}${o.exp ? `The soonest one expires <b style="color:${n <= SOON ? 'var(--warn)' : 'var(--ink)'}">${fmtExp(o.exp)}</b>${fmtLeft(o.exp) ? ' — ' + fmtLeft(o.exp) : ''}${o.qty > 1 ? ` (${o.qty} of those)` : ''}.` : 'No date on this one.'}</p>
     <div class="choice">
       <button class="link big flourish" id="toYes">Yes, that one</button>
       ${lots.length > 1 ? `<button class="link big" id="toOther">I took a different one</button>` : ''}
@@ -526,7 +562,8 @@ function openTakeOut(id) {
   $('#toYes', body).onclick = () => take(o.id);
   $('#toCancel', body).onclick = closeSheet;
   if (lots.length > 1) $('#toOther', body).onclick = () => {
-    $('#toLots', body).innerHTML = `<div class="sugg">${lots.slice(1).map(l => `<button data-lot="${l.id}">Expires ${l.exp ? fmtExp(l.exp) : '— no date'} <small>· ${l.qty} there</small></button>`).join('')}</div>`;
+    const rest = lots.slice(1).sort((a, b) => (b.code === code) - (a.code === code));   // the kind you scanned first
+    $('#toLots', body).innerHTML = `<div class="sugg">${rest.map(l => `<button data-lot="${l.id}">${kindName(it, l.code) ? esc(kindName(it, l.code)) + ' · ' : ''}expires ${l.exp ? fmtExp(l.exp) : '— no date'} <small>· ${l.qty} there</small></button>`).join('')}</div>`;
   };
   $('#toLots', body).onclick = e => { const b = e.target.closest('[data-lot]'); if (b) take(b.dataset.lot); };
 }
@@ -538,7 +575,7 @@ function openUsePicker() {
     $('#upList', body).innerHTML = list.map(i => `<button data-take="${i.id}">${esc(i.name)} <small>· ${qtyOf(i)} ${i.loc ? '· ' + esc(i.loc) : ''}</small></button>`).join('') || '<p class="note">Nothing found.</p>'; };
   draw(); $('#upQ', body).oninput = draw;
   $('#upList', body).onclick = e => { const b = e.target.closest('[data-take]'); if (b) openTakeOut(b.dataset.take); };
-  setTimeout(() => $('#upQ', body).focus(), 350);
+  setTimeout(() => $('#upQ', body)?.focus(), 350);
 }
 
 /* ───────────── Scanner ───────────── */
@@ -595,8 +632,8 @@ function openFound(id, code) {
       <button class="link big flourish" id="fdOut">Taking one out<small>using it now</small></button>
       <button class="link mute" id="fdView">just looking</button>
     </div>`);
-  $('#fdIn', body).onclick = () => openPutAway(id);
-  $('#fdOut', body).onclick = () => openTakeOut(id);
+  $('#fdIn', body).onclick = () => openPutAway(id, 1, code || '');
+  $('#fdOut', body).onclick = () => openTakeOut(id, code || '');
   $('#fdView', body).onclick = () => openItem(id);
 }
 function openNew(code, p) {
