@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.0.2';
+const VERSION = '1.1.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -111,6 +111,15 @@ const STORES = {
   sams: { name: "Sam's Club", sub: 'Provo', home: 'https://www.samsclub.com/', q: n => `https://www.samsclub.com/s/${encodeURIComponent(n)}` },
   walmart: { name: 'Walmart', sub: 'Spanish Fork', home: 'https://www.walmart.com/store/4068-spanish-fork-ut', q: n => `https://www.walmart.com/search?q=${encodeURIComponent(n)}` }
 };
+// An item can have many barcodes ("kinds"): regular + blueberry Belvita both count as Belvita.
+const kindsOf = it => (it.codes || []).map(c => ({ code: c, ...((it.kinds || {})[c] || {}) }));
+function addKind(x, code, p) {
+  x.codes = [...new Set([...(x.codes || []), code])];
+  x.kinds = { ...(x.kinds || {}) };
+  if (p && !x.kinds[code]) x.kinds[code] = { name: p.name || '', img: p.img || '' };
+}
+function dropKind(x, code) { x.codes = (x.codes || []).filter(c => c !== code); if (x.kinds) { x.kinds = { ...x.kinds }; delete x.kinds[code]; } }
+const ownerOf = code => [...DB.items.values()].find(i => (i.codes || []).some(c => normCode(c) === code));
 const normCode = c => { c = String(c).trim(); return /^\d{12}$/.test(c) ? '0' + c : c; };
 const flowerPH = `<svg viewBox="0 0 24 24" fill="currentColor"><g opacity=".9">${[0, 72, 144, 216, 288].map(a => `<ellipse cx="12" cy="6.5" rx="3.2" ry="4.6" transform="rotate(${a} 12 12)"/>`).join('')}</g><circle cx="12" cy="12" r="2.6" fill="#f6d36b"/></svg>`;
 const pic = (it, cls = 'thumb') => it.img ? `<img class="${cls}" src="${esc(it.img)}" alt="" loading="lazy">` : `<div class="${cls} ph">${flowerPH}</div>`;
@@ -260,7 +269,7 @@ function row(it) {
   const q = qtyOf(it), s = soonest(it), n = s ? daysLeft(s.exp) : Infinity;
   const cls = q === 0 ? 'out' : q < (it.par ?? 1) ? 'low' : '';
   return `<button class="item ${cls}" data-open="${it.id}">${pic(it)}
-    <span><div class="nm">${esc(it.name)}</div><div class="meta">${it.loc ? `<span class="loc">${esc(it.loc)}</span>` : ''}${it.brand ? esc(it.brand) : ''}</div></span>
+    <span><div class="nm">${esc(it.name)}</div><div class="meta">${it.loc ? `<span class="loc">${esc(it.loc)}</span>` : ''}${(it.codes || []).length > 1 ? `<span>${it.codes.length} kinds</span>` : ''}${it.brand ? `<span>${esc(it.brand)}</span>` : ''}</div></span>
     <span class="q"><div class="n">${q || '–'}</div><div class="e ${n <= SOON ? 'soon' : ''}">${s ? (n < 0 ? 'expired' : 'exp ' + fmtExp(s.exp)) : ''}</div></span></button>`;
 }
 document.addEventListener('click', e => {
@@ -366,7 +375,13 @@ function openItem(id, preset = {}) {
       <label class="field"><span>Usually buy at</span><select id="fStore">${Object.entries(STORES).map(([k, s]) => `<option value="${k}" ${k === d.store ? 'selected' : ''}>${s.name}</option>`).join('')}</select></label>
       <label class="field"><span>Brand / size</span><input id="fBrand" value="${esc(d.brand || '')}"></label>
     </div>
-    <label class="field"><span>Barcodes</span><input id="fCodes" value="${esc((d.codes || []).join(', '))}" placeholder="scan to link one" inputmode="numeric"></label>
+    <div class="sec-title" style="color:var(--ink);margin-top:20px">Kinds we buy</div>
+    <p class="note" style="margin:0 0 4px">Every barcode here counts as this item, so different flavors or brands all land in one place.</p>
+    <div id="fKinds"></div>
+    <div class="acts" style="justify-content:flex-start;gap:24px;margin-top:8px">
+      <button class="link flourish" id="fScanKind">scan another kind</button><button class="link mute" id="fTypeKind">type a barcode</button></div>
+    <div class="cols hidden" id="fTypeRow" style="align-items:end"><label class="field"><span>Barcode number</span><input id="fTyped" inputmode="numeric"></label>
+      <button class="link" id="fTypedGo" style="margin-bottom:18px">add</button></div>
     <label class="field"><span>Notes</span><input id="fNotes" value="${esc(d.notes || '')}"></label>
     <div class="acts">
       ${isNew ? '<span></span>' : '<button class="link warn" id="fDel">remove item</button>'}
@@ -398,12 +413,33 @@ function openItem(id, preset = {}) {
   $('#pickPic', body).onclick = () => choosePhoto(d.name, url => { d.img = url; $('#pickPic', body).innerHTML = `<img class="pic" src="${esc(url)}"><small>change</small>`; }, true);
   $('#fCancel', body).onclick = closeSheet;
   if (!isNew) $('#fDel', body).onclick = async () => { if (confirm(`Remove ${d.name} from the app entirely?`)) { await DB.deleteItem(d.id); closeSheet(); toast('Removed'); } };
-  $('#fSave', body).onclick = async () => {
-    d.name = $('#fName', body).value.trim(); if (!d.name) return $('#fName', body).focus();
+  const collect = () => {
+    d.name = $('#fName', body).value.trim(); if (!d.name) { $('#fName', body).focus(); toast('Give it a name first'); return false; }
     d.cat = $('#fCat', body).value; d.store = $('#fStore', body).value; d.brand = $('#fBrand', body).value.trim();
     d.notes = $('#fNotes', body).value.trim();
-    d.codes = [...new Set($('#fCodes', body).value.split(/[\s,]+/).filter(Boolean).map(normCode))];
+    $$('[data-kname]', body).forEach(inp => { const c = inp.dataset.kname; d.kinds = { ...(d.kinds || {}) }; d.kinds[c] = { ...(d.kinds[c] || {}), name: inp.value.trim() }; });
     d.lots = mergeLots(d.lots);
+    return true;
+  };
+  const drawKinds = () => {
+    const ks = kindsOf(d);
+    $('#fKinds', body).innerHTML = ks.length ? `<div class="lots">${ks.map(k => `<div class="lot">
+      ${k.img ? `<img class="thumb" src="${esc(k.img)}" alt="" style="width:40px;height:40px">` : `<div class="thumb ph" style="width:40px;height:40px">${flowerPH}</div>`}
+      <span class="when" style="min-width:0"><input data-kname="${esc(k.code)}" value="${esc(k.name || '')}" placeholder="name this kind, like Blueberry"
+        style="border:0;background:none;font-weight:600;font-size:15px;padding:0;width:100%;outline:none"><small>${esc(k.code)}</small></span>
+      <button class="link mute" data-rmkind="${esc(k.code)}" aria-label="Remove this barcode" style="font-size:22px;padding:0 4px">×</button></div>`).join('')}</div>`
+      : `<p class="note">No barcodes yet. Scan one and it'll show up here.</p>`;
+  };
+  drawKinds();
+  body.addEventListener('click', e => { const c = e.target.dataset?.rmkind; if (c == null) return;
+    collect(); dropKind(d, c); drawKinds(); toast('Barcode removed (tap Save to keep it that way)'); });
+  // scanning or typing a kind saves what's on screen first, then comes back here
+  const attach = async code => { if (!collect()) return; await DB.saveItem(d); attachKind(d.id, code); };
+  $('#fScanKind', body).onclick = async () => { if (!collect()) return; await DB.saveItem(d); openScanner({ attach: d.id }); };
+  $('#fTypeKind', body).onclick = () => { $('#fTypeRow', body).classList.toggle('hidden'); $('#fTyped', body).focus(); };
+  $('#fTypedGo', body).onclick = () => { const v = $('#fTyped', body).value.replace(/\s/g, ''); if (v) attach(normCode(v)); };
+  $('#fSave', body).onclick = async () => {
+    if (!collect()) return;
     await DB.saveItem(d); closeSheet(); toast(isNew ? 'Added ✿' : 'Saved ✿');
   };
   if (isNew && !d.name) setTimeout(() => $('#fName', body).focus(), 350);
@@ -508,36 +544,52 @@ function openUsePicker() {
 /* ───────────── Scanner ───────────── */
 let scanner = null;
 async function closeScanner() { if (scanner) { const s = scanner; scanner = null; try { await s.stop(); s.clear(); } catch {} } }
-function openScanner() {
-  const body = openSheet(`<h2>Scan a barcode</h2><p class="sub">Hold the code inside the frame.</p>
+let scanBusy = false;
+function openScanner(opts = {}) {
+  scanBusy = false;
+  const target = opts.attach && DB.items.get(opts.attach);
+  const body = openSheet(`<h2>${target ? 'Scan the other kind' : 'Scan a barcode'}</h2><p class="sub">${target ? `It'll count as <b>${esc(target.name)}</b>.` : 'Hold the code inside the frame.'}</p>
     <div id="reader"></div>
     <div class="cols" style="align-items:end"><label class="field"><span>Or type the number</span><input id="typed" inputmode="numeric" placeholder="0 12345 67890 5"></label>
     <button class="link" id="typedGo" style="margin-bottom:18px">look it up</button></div>`);
-  $('#typedGo', body).onclick = () => { const v = $('#typed', body).value.replace(/\s/g, ''); if (v) onCode(v); };
+  $('#typedGo', body).onclick = () => { const v = $('#typed', body).value.replace(/\s/g, ''); if (v) onCode(v, opts); };
   const start = () => {
     if (!window.Html5Qrcode) return setTimeout(start, 200);
     const F = window.Html5QrcodeSupportedFormats;
     scanner = new Html5Qrcode('reader', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE], verbose: false,
       experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
     scanner.start({ facingMode: 'environment' }, { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * .86), height: Math.floor(Math.min(h, w) * .45) }), aspectRatio: 1.333 },
-      text => { navigator.vibrate?.(30); onCode(text); }, () => {})
+      text => { if (scanBusy) return; scanBusy = true; navigator.vibrate?.(30); onCode(text, opts); }, () => {})
       .catch(() => { $('#reader', body).innerHTML = `<p class="note" style="color:#fff;padding:20px">Camera isn't available here. Allow camera access, or type the number below.</p>`; });
   };
   start();
 }
-async function onCode(raw) {
+async function onCode(raw, opts = {}) {
   await closeScanner();
   if (/^i love you$/i.test(raw.trim())) return loveNote();
   const code = normCode(raw);
-  const found = [...DB.items.values()].find(i => (i.codes || []).some(c => normCode(c) === code));
-  if (found) return openFound(found.id);
+  if (opts.attach) return attachKind(opts.attach, code);
+  const found = ownerOf(code);
+  if (found) return openFound(found.id, code);
   openSheet(`<h2>Looking it up…</h2><p class="sub">${esc(code)}</p>`);
   const p = await lookup(code);
   openNew(code, p);
 }
-function openFound(id) {
+// add a barcode to an item from its own page ("scan another kind")
+async function attachKind(id, code) {
   const it = DB.items.get(id);
-  const body = openSheet(`${heroHTML(it, `${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}`)}
+  const prev = ownerOf(code);
+  if (prev?.id === id) { toast('That one is already here'); return openItem(id); }
+  openSheet(`<h2>Looking it up…</h2><p class="sub">${esc(code)}</p>`);
+  const p = await lookup(code);
+  if (prev) await DB.mutate(prev.id, x => dropKind(x, code));
+  await DB.mutate(id, x => { addKind(x, code, p || { name: '' }); if (!x.img && p?.img) x.img = p.img; });
+  toast(prev ? `Moved from ${prev.name} ✿` : `Added ${p?.name ? p.name : 'that kind'} to ${it.name} ✿`);
+  openItem(id);
+}
+function openFound(id, code) {
+  const it = DB.items.get(id), kind = code && (it.kinds || {})[code];
+  const body = openSheet(`${heroHTML(it, `${kind?.name ? esc(kind.name) + ' · ' : ''}${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}`)}
     <div class="choice">
       <button class="link big flourish" id="fdIn">Putting it away<small>add to the shelf</small></button>
       <button class="link big flourish" id="fdOut">Taking one out<small>using it now</small></button>
@@ -556,17 +608,17 @@ function openNew(code, p) {
     ${p ? `<div class="result">${p.img ? `<img src="${esc(p.img)}">` : ''}<div><b>${esc(p.name)}</b><div class="note">${esc([p.brand, p.size].filter(Boolean).join(' · '))}</div></div></div>`
         : `<p class="sub">No picture or name found for ${esc(code)} — you can fill it in.</p>`}
     <div class="sec-title" style="color:var(--ink)">Is it one of ours?</div>
-    <p class="note">Her tracker items don't know their barcodes yet — pick the match once and it'll be remembered.</p>
+    <p class="note">Pick the item it belongs to and it'll be remembered. One item can have several kinds, so blueberry and regular Belvita can both count as Belvita.</p>
     <div class="sugg" id="nwGuess">${guesses.map(i => `<button data-link="${i.id}">${esc(i.name)} <small>· ${esc(DB.meta.cats.find(c => c.id === i.cat)?.name || '')}</small></button>`).join('')}</div>
     <label class="field"><span>Search our items</span><input id="nwQ" type="search" autocomplete="off"></label><div class="sugg" id="nwList"></div>
     <div class="acts"><button class="link mute" id="nwCancel">cancel</button><button class="link big flourish" id="nwNew">Add as a new item</button></div>`);
   $('#nwQ', body).oninput = e => { const q = e.target.value.toLowerCase();
     $('#nwList', body).innerHTML = q ? all.filter(i => i.name.toLowerCase().includes(q)).slice(0, 12).map(i => `<button data-link="${i.id}">${esc(i.name)} <small>· ${esc(DB.meta.cats.find(c => c.id === i.cat)?.name || '')}</small></button>`).join('') : ''; };
   body.addEventListener('click', async e => { const b = e.target.closest('[data-link]'); if (!b) return;
-    const out = await DB.mutate(b.dataset.link, x => { x.codes = [...new Set([...(x.codes || []), code])]; if (!x.img && p?.img) x.img = p.img; if (!x.brand && p?.brand) x.brand = p.brand; });
-    toast('Linked ✿'); openFound(out.id); });
+    const out = await DB.mutate(b.dataset.link, x => { addKind(x, code, p || { name: '' }); if (!x.img && p?.img) x.img = p.img; if (!x.brand && p?.brand) x.brand = p.brand; });
+    toast(`Now counts as ${out.name} ✿`); openFound(out.id, code); });
   $('#nwCancel', body).onclick = closeSheet;
-  $('#nwNew', body).onclick = () => openItem(null, { name: p?.name || '', img: p?.img || '', brand: [p?.brand, p?.size].filter(Boolean).join(' · '), codes: [code] });
+  $('#nwNew', body).onclick = () => openItem(null, { name: p?.name || '', img: p?.img || '', brand: [p?.brand, p?.size].filter(Boolean).join(' · '), codes: [code], kinds: { [code]: { name: p?.name || '', img: p?.img || '' } } });
 }
 async function lookup(code) {
   const tryJSON = async (url, t = 6000) => { const c = new AbortController(); const tm = setTimeout(() => c.abort(), t);
