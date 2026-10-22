@@ -28,10 +28,12 @@
 [data-theme="moonlit"]{--bg:#26222c;--card:#302a37;--ink:#f1e7ee;--muted:#a597a6;--accent:#e6a7c0;--accent2:#b998b3;--soft:#3b3344;--leaf:#9fbf9a;--warn:#ff8fa3;--grid:rgba(230,167,192,.05);--splash:#3e3448;--tulip1:#e6a7c0;--tulip2:#c9b6f0}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font:500 16px/1.4 Quicksand,system-ui,sans-serif;min-height:100dvh;
+html,body{margin:0;background:var(--bg);color:var(--ink);height:100%;overflow:hidden;overscroll-behavior:none}
+body{font:500 16px/1.4 Quicksand,system-ui,sans-serif;display:flex;flex-direction:column;
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
-  background-size:22px 22px;padding-bottom:calc(110px + env(safe-area-inset-bottom))}
+  background-size:22px 22px}
+/* the list scrolls inside its own box; the dock sits below it in the layout (no position:fixed) */
+#scroller{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 input,select,textarea{font:inherit;color:inherit}
 .serif{font-family:Fraunces,Georgia,serif}
@@ -95,9 +97,10 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .empty-note{color:var(--muted);text-align:center;padding:40px 0;font-style:italic}
 
 /* ── Dock ── */
-.dock{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:16px 26px calc(12px + env(safe-area-inset-bottom));
+.dock{position:relative;flex:none;width:100%;z-index:20;padding:8px 26px calc(12px + env(safe-area-inset-bottom));
   display:flex;align-items:flex-end;justify-content:space-between;max-width:760px;margin:0 auto;
-  background:linear-gradient(transparent,var(--bg) 38%)}
+}
+.dock::before{content:"";position:absolute;left:0;right:0;top:-26px;height:26px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
 .dock .ic{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);font-weight:700;width:54px}
 .dock .ic svg{width:28px;height:28px;stroke:var(--ink);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .badge{position:absolute;margin:-4px 0 0 22px;min-width:17px;height:17px;border-radius:9px;background:var(--warn);color:#fff;font-size:10px;display:grid;place-items:center;padding:0 4px}
@@ -239,6 +242,7 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
   </div>
 </div>
 
+<div id="scroller">
 <header>
   <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
     <circle cx="32" cy="32" r="31" style="fill:var(--soft)"/>
@@ -263,6 +267,7 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
   <nav class="cats" id="cats"></nav>
   <div id="list"></div>
 </main>
+</div>
 
 <nav class="dock">
   <button class="ic" id="goShop" aria-label="Shopping list">

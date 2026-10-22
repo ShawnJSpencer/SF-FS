@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -249,15 +249,42 @@ function row(it) {
 document.addEventListener('click', e => {
   const o = e.target.closest('[data-open]'); if (o && !o.closest('.sheet')) return openItem(o.dataset.open);
   const c = e.target.closest('[data-cat]');
-  if (c) { activeCat = c.dataset.cat; $('#cat-' + activeCat)?.scrollIntoView({ behavior: 'smooth' }); $$('.cats button').forEach(b => b.classList.toggle('on', b === c)); }
+  if (c) jumpToCat(c.dataset.cat);
   if (e.target.id === 'addFromSearch') openItem(null, { name: query });
 });
 $('#q').addEventListener('input', e => { query = e.target.value; render(); });
+
+// The list scrolls inside #scroller. Never use scrollIntoView here: on iPhone it can
+// move the whole page and fight the finger (the old rubber-band bug).
+const scroller = $('#scroller');
+let jumping = 0;
+function markCat(id) {
+  activeCat = id;
+  const nav = $('#cats');
+  $$('.cats button').forEach(b => {
+    b.classList.toggle('on', b.dataset.cat === id);
+    if (b.dataset.cat === id) nav.scrollTo({ left: b.offsetLeft - nav.clientWidth / 2 + b.offsetWidth / 2, behavior: 'smooth' });
+  });
+}
+function jumpToCat(id) {
+  const sec = $('#cat-' + id); if (!sec) return;
+  markCat(id);
+  const top = sec.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 52;
+  jumping = Date.now();
+  scroller.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+}
 // keep the category word under-lined as you scroll
-addEventListener('scroll', () => {
-  let cur = null; for (const s of $$('section.cat')) { if (s.getBoundingClientRect().top < 120) cur = s.id.slice(4); }
-  if (cur && cur !== activeCat) { activeCat = cur; $$('.cats button').forEach(b => { b.classList.toggle('on', b.dataset.cat === cur); if (b.dataset.cat === cur) b.scrollIntoView({ inline: 'center', block: 'nearest' }); }); }
+scroller.addEventListener('scroll', () => {
+  if (Date.now() - jumping < 900) return;   // let a tapped jump finish first
+  const lim = scroller.getBoundingClientRect().top + 120;
+  let cur = null; for (const s of $$('section.cat')) { if (s.getBoundingClientRect().top < lim) cur = s.id.slice(4); }
+  if (cur && cur !== activeCat) markCat(cur);
 }, { passive: true });
+
+// iPhone sometimes leaves the page shifted after the keyboard closes. Snap it back.
+const settle = () => { if (!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) window.scrollTo(0, 0); };
+document.addEventListener('focusout', () => setTimeout(settle, 60));
+window.visualViewport?.addEventListener('resize', () => setTimeout(settle, 60));
 
 /* ───────────── Sheets ───────────── */
 let onSheetClose = null;
@@ -269,6 +296,7 @@ function openSheet(html, onClose) {
   return $('#sheetBody');
 }
 function closeSheet() {
+  document.activeElement?.blur?.();
   closeScanner(); onSheetClose?.(); onSheetClose = null;
   $('#veil').classList.remove('show'); $('#sheet').classList.remove('show');
   setTimeout(() => { if (!$('#sheet').classList.contains('show')) $('#veil').classList.add('hidden'); }, 300);
