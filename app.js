@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -251,11 +251,19 @@ async function goCloud() {
 function setSync(txt, on = false) { $('#syncState').innerHTML = `<span class="dot ${on ? 'on' : ''}"></span><span>${esc(txt)}</span>`; }
 
 /* ───────────── Home ───────────── */
+// Food & freezers A–Z, then Household, then Longterm (new categories slot in alphabetically).
+const LAST = ['household', 'longterm'];
+function catGroups() {
+  const all = DB.meta.cats;
+  const food = all.filter(c => !LAST.includes(c.id)).sort((a, b) => a.name.localeCompare(b.name));
+  return [food, ...LAST.map(id => all.filter(c => c.id === id))].filter(g => g.length);
+}
+const orderedCats = () => catGroups().flat();
 let query = '', activeCat = null;
 function render() {
   const items = [...DB.items.values()];
   const q = query.trim().toLowerCase();
-  const cats = DB.meta.cats;
+  const cats = orderedCats();
   // use-soon ribbon
   const soon = [];
   items.forEach(it => sortLots(it.lots).forEach(l => { const n = daysLeft(l.exp); if (n <= SOON) soon.push({ it, l, n }); }));
@@ -265,7 +273,7 @@ function render() {
   soonEl.innerHTML = `<h3>Use soon</h3><div class="row">${soon.map(({ it, l, n }) =>
     `<button class="chip" data-open="${it.id}">${pic(it, '')}<span><b>${esc(it.name)}</b><small>${n < 0 ? 'expired ' + fmtExp(l.exp) : fmtLeft(l.exp)}</small></span></button>`).join('')}</div>`;
   // nav
-  $('#cats').innerHTML = cats.map(c => `<button data-cat="${c.id}" class="${c.id === activeCat ? 'on' : ''}">${esc(c.name)}</button>`).join('');
+  $('#cats').innerHTML = catGroups().map(g => g.map(c => `<button data-cat="${c.id}" class="${c.id === activeCat ? 'on' : ''}">${esc(c.name)}</button>`).join('')).join('<span class="sep" aria-hidden="true">•</span>');
   // sections
   const byCat = new Map(cats.map(c => [c.id, []]));
   items.forEach(it => { if (!q || (it.name + ' ' + (it.loc || '') + ' ' + (it.brand || '')).toLowerCase().includes(q)) (byCat.get(it.cat) || byCat.set(it.cat, []).get(it.cat)).push(it); });
@@ -385,7 +393,7 @@ function openItem(id, preset = {}) {
     <div class="sec-title" style="color:var(--ink);margin-top:20px">Where it lives</div>
     <div id="fShelves">${shelvesHTML(d.loc)}</div>
     <div class="cols">
-      <label class="field"><span>Category</span><select id="fCat">${DB.meta.cats.map(c => `<option value="${c.id}" ${c.id === d.cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>Category</span><select id="fCat">${orderedCats().map(c => `<option value="${c.id}" ${c.id === d.cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       <label class="field"><span>Keep on hand</span><input id="fPar" type="number" inputmode="numeric" min="0" value="${d.par ?? 1}"></label>
     </div>
     <div class="cols">
