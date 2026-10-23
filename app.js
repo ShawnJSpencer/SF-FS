@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.2.3';
+const VERSION = '1.3.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -284,6 +284,7 @@ function render() {
     return `<section class="cat" id="cat-${c.id}"><h2>${esc(c.name)} <small>${units} on hand</small></h2><div class="items">${list.map(row).join('')}</div></section>`;
   }).join('');
   $('#list').innerHTML = html || `<p class="empty-note">Nothing matches “${esc(query)}”.<br><button class="link" id="addFromSearch">Add it ✿</button></p>`;
+  layoutCards();
   // shopping badge + app icon badge
   const need = items.filter(i => qtyOf(i) < (i.par ?? 1)).length;
   $('#shopBadge').textContent = need; $('#shopBadge').classList.toggle('hidden', !need);
@@ -316,8 +317,10 @@ function markCat(id) {
     if (b.dataset.cat === id) nav.scrollTo({ left: b.offsetLeft - nav.clientWidth / 2 + b.offsetWidth / 2, behavior: 'smooth' });
   });
 }
+const wide = () => innerWidth >= 700;   // category cards in columns
 function jumpToCat(id) {
   const sec = $('#cat-' + id); if (!sec) return;
+  if (wide()) { sec.classList.remove('glow'); void sec.offsetWidth; sec.classList.add('glow'); }
   markCat(id);
   const top = sec.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 52;
   jumping = Date.now();
@@ -326,6 +329,7 @@ function jumpToCat(id) {
 // keep the category word under-lined as you scroll
 scroller.addEventListener('scroll', () => {
   if (Date.now() - jumping < 900) return;   // let a tapped jump finish first
+  if (wide()) return;                         // cards sit side by side, so there's no single "current" one
   const lim = scroller.getBoundingClientRect().top + 120;
   let cur = null; for (const s of $$('section.cat')) { if (s.getBoundingClientRect().top < lim) cur = s.id.slice(4); }
   if (cur && cur !== activeCat) markCat(cur);
@@ -335,6 +339,20 @@ scroller.addEventListener('scroll', () => {
 const settle = () => { if (!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) window.scrollTo(0, 0); };
 document.addEventListener('focusout', () => setTimeout(settle, 60));
 window.visualViewport?.addEventListener('resize', () => setTimeout(settle, 60));
+
+// On iPad/computer, deal the category cards into columns left-to-right, each into
+// whichever column is shortest, so A–Z reads across like her graph-paper page.
+function layoutCards() {
+  const list = $('#list'), secs = $$('section.cat', list);
+  if (!wide() || !secs.length) { list.classList.remove('cols'); return; }
+  const n = Math.max(1, Math.floor((list.clientWidth + 20) / (280 + 20)));
+  list.classList.add('cols');
+  const cols = Array.from({ length: n }, () => { const c = document.createElement('div'); c.className = 'col'; return c; });
+  list.replaceChildren(...cols);
+  for (const s of secs) cols.reduce((a, b) => (b.offsetHeight < a.offsetHeight ? b : a)).append(s);
+}
+let lastW = innerWidth;
+addEventListener('resize', () => { if (Math.abs(innerWidth - lastW) > 40) { lastW = innerWidth; render(); } });
 
 /* ───────────── Sheets ───────────── */
 let onSheetClose = null;
