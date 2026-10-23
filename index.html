@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Food Storage</title>
 <meta name="description" content="Spencer Family Food Storage">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -35,6 +35,9 @@ document.querySelector('meta[name=theme-color]').setAttribute('content',splash?S
 [data-theme="moonlit"]{--bg:#26222c;--card:#302a37;--ink:#f1e7ee;--muted:#a597a6;--accent:#e6a7c0;--accent2:#b998b3;--soft:#3b3344;--leaf:#9fbf9a;--warn:#ff8fa3;--grid:rgba(230,167,192,.02);--splash:#3e3448;--tulip1:#e6a7c0;--tulip2:#c9b6f0}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* no zooming: no double-tap zoom, and text boxes are at least 16px so iPhone never zooms in when you tap one */
+html,body{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+@media (pointer:coarse){input,textarea{font-size:max(16px,1em)!important}}
 html,body{margin:0;background:var(--bg);color:var(--ink);height:100%;overflow:hidden;overscroll-behavior:none}
 body{font:500 16px/1.4 Quicksand,system-ui,sans-serif;display:flex;flex-direction:column;
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
