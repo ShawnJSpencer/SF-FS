@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.8';
+const VERSION = '1.3.9';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -488,7 +488,14 @@ function openItem(id, preset = {}) {
     if (yr != null) { d.lots[yr].exp = ''; drawLots(); }
   });
   body.addEventListener('change', e => {
-    const i = e.target.dataset.exp; if (i != null) { d.lots[i].exp = e.target.value; drawLots(); }
+    // Update just the little "expires …" line. Redrawing the row would close the iPhone date wheel mid-spin.
+    const i = e.target.dataset.exp;
+    if (i != null) {
+      const l = d.lots[i]; l.exp = e.target.value;
+      const when = e.target.closest('.when'), n = daysLeft(l.exp);
+      when.classList.toggle('soon', n <= SOON);
+      when.querySelector('small').textContent = l.exp ? (fmtLeft(l.exp) || 'expires ' + fmtExp(l.exp)) : 'no date — tap to set';
+    }
     const j = e.target.dataset.lkind; if (j != null) { if (e.target.value) d.lots[j].code = e.target.value; else delete d.lots[j].code; drawLots(); }
   });
   wireShelves($('#fShelves', body), () => d.loc, v => { d.loc = v; drawLots(); });
