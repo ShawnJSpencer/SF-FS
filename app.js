@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.7';
+const VERSION = '1.3.8';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -257,12 +257,22 @@ async function goCloud() {
   } catch (e) { console.error(e); setSync('no access'); toast("This account isn't allowed in — check SETUP.md step 3"); return; }
   DB.mode = 'cloud';
   unsubs.forEach(u => u()); unsubs = [];
-  unsubs.push(onSnapshot(collection(db, DB.path('items')), snap => {
-    DB.items = new Map(snap.docs.map(d => [d.id, d.data()])); DB.persistLocal(); render();
-    setSync(snap.metadata.fromCache ? 'saved, syncing' : 'synced', !snap.metadata.fromCache);
+  // includeMetadataChanges: also tell us when the cloud *confirms* (even if nothing changed),
+  // otherwise the corner can sit on "saved, syncing" forever.
+  const live = { includeMetadataChanges: true };
+  let lastItems = null;
+  unsubs.push(onSnapshot(collection(db, DB.path('items')), live, snap => {
+    if (snap.docChanges().length || lastItems === null) {   // don't redraw for a status-only update
+      DB.items = new Map(snap.docs.map(d => [d.id, d.data()])); DB.persistLocal(); render(); lastItems = snap.size;
+    }
+    const m = snap.metadata;
+    setSync(m.hasPendingWrites ? 'saving…' : m.fromCache ? 'connecting…' : 'synced', !m.fromCache && !m.hasPendingWrites);
   }));
-  unsubs.push(onSnapshot(doc(db, DB.path()), snap => { if (snap.exists() && !snap.metadata.fromCache) { DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render(); switchToCostco(); }
-    else if (snap.exists()) { DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render(); } }));
+  unsubs.push(onSnapshot(doc(db, DB.path()), live, snap => {
+    if (!snap.exists()) return;
+    DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render();
+    if (!snap.metadata.fromCache) switchToCostco();   // only once we've heard from the cloud
+  }));
 }
 function setSync(txt, on = false) {
   const el = $('#syncState'); el.innerHTML = `<span class="dot ${on ? 'on' : ''}"></span><span>${esc(txt)}</span>`;
@@ -975,9 +985,10 @@ $('#goShop').onclick = openShop;
 $('#goSettings').onclick = openSettings;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 // One-time (Oct 2026): Costco became the main store. Every item that said Macey's switches to Costco, once per household.
+let switching = false;
 async function switchToCostco() {
-  if (DB.meta.storesV2) return;
-  DB.meta.storesV2 = true;
+  if (DB.meta.storesV2 || switching) return;
+  switching = true; DB.meta.storesV2 = true;
   if (DB.mode === 'cloud') {
     const { collection, query, where, getDocs, writeBatch, doc, setDoc } = DB.fb, db = DB.fb.db;
     try {
@@ -987,7 +998,7 @@ async function switchToCostco() {
         const b = writeBatch(db); snap.docs.slice(i, i + 400).forEach(d => b.update(d.ref, { store: 'costco' })); await b.commit();
       }
       if (snap.size) toast(`Switched ${snap.size} items to Costco ✿`);
-    } catch (e) { console.warn(e); DB.meta.storesV2 = false; }
+    } catch (e) { console.warn(e); DB.meta.storesV2 = false; switching = false; toast("Couldn't switch stores yet — will try again next time"); }
   } else {
     let n = 0; DB.items.forEach(it => { if (it.store === 'maceys') { it.store = 'costco'; n++; } });
     DB.persistLocal(); render();
