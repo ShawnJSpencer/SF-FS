@@ -10,6 +10,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Food Storage">
 <meta name="theme-color" content="#fdf6f3">
+<script>
+/* Apply this device's color theme before the first frame, so the iPhone status bar matches it. */
+(function(){try{var g=function(k){try{return JSON.parse(localStorage.getItem('sffs-dev-'+k))}catch(e){return null}};
+var t=g('theme')||'blush',splash=g('splash')!==false,BG={"blush": "#fdf6f3", "lavender": "#f7f4fb", "sage": "#f4f6f0", "buttercup": "#fffaf0", "hydrangea": "#f2f8f8", "peach": "#fff6f0", "wildflower": "#fbf8f2", "moonlit": "#26222c"},SP={"blush": "#e7a7b7", "lavender": "#b9a8dc", "sage": "#a3bb98", "buttercup": "#efc664", "hydrangea": "#93c0cc", "peach": "#f1b18f", "wildflower": "#cf89a6", "moonlit": "#3e3448"};
+if(!BG[t])t='blush';var r=document.documentElement;r.setAttribute('data-theme',t);if(splash)r.className+=' splashing';
+document.querySelector('meta[name=theme-color]').setAttribute('content',splash?SP[t]:BG[t]);}catch(e){}})();
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/favicon-32.png">
@@ -206,6 +213,7 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
 /* ── Splash ── */
+html.splashing,html.splashing body{background:var(--splash)}
 #splash{position:fixed;inset:0;z-index:100;background:var(--splash);overflow:hidden;transition:opacity .45s}
 #splash.bye{opacity:0;pointer-events:none}
 #splash canvas{position:absolute;inset:0;width:100%;height:100%}

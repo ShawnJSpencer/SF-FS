@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.4';
+const VERSION = '1.3.5';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,7 +21,7 @@ function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   const cs = getComputedStyle(document.documentElement);
   const v = n => cs.getPropertyValue(n).trim();
-  $('meta[name=theme-color]').content = v('--bg');
+  $('meta[name=theme-color]').content = v(document.documentElement.classList.contains('splashing') ? '--splash' : '--bg');
   const fl = (x, y, c, r = 4) => [0, 72, 144, 216, 288].map(a => {
     const rad = a * Math.PI / 180;
     return `<ellipse cx='${x + Math.cos(rad) * r * .9}' cy='${y + Math.sin(rad) * r * .9}' rx='${r * .62}' ry='${r * .42}' transform='rotate(${a} ${x + Math.cos(rad) * r * .9} ${y + Math.sin(rad) * r * .9})' fill='${c}'/>`;
@@ -36,9 +36,14 @@ function applyTheme(t) {
 applyTheme(dev.get('theme', 'blush'));
 
 /* ───────────── Splash: white flowers spiral out, two tulips bloom ───────────── */
+// While the opening bloom shows, the status bar uses the bloom color; afterwards, the page color.
+function endSplashColors() {
+  document.documentElement.classList.remove('splashing');
+  $('meta[name=theme-color]').content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+}
 function runSplash() {
   const sp = $('#splash');
-  if (!dev.get('splash', true)) { sp.remove(); return; }
+  if (!dev.get('splash', true)) { sp.remove(); endSplashColors(); return; }
   const cv = $('#petals'), ctx = cv.getContext('2d');
   const dpr = Math.min(devicePixelRatio || 1, 2);
   const W = innerWidth, H = innerHeight;
@@ -72,7 +77,7 @@ function runSplash() {
   }
   requestAnimationFrame(frame);
   let done = false;
-  const close = () => { if (done) return; done = true; sp.classList.add('bye'); setTimeout(() => sp.remove(), 500); };
+  const close = () => { if (done) return; done = true; sp.classList.add('bye'); endSplashColors(); setTimeout(() => sp.remove(), 500); };
   setTimeout(close, 3300);
   sp.addEventListener('click', close);
 }
