@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1008,7 +1008,7 @@ async function enablePush(el) {
   const json = sub.toJSON(); const id = btoa(json.endpoint).replace(/[^a-z0-9]/gi, '').slice(-40);
   const { doc, setDoc } = DB.fb;
   await setDoc(doc(DB.fb.db, DB.path('push'), id), { sub: json, who: DB.user.email, device: navigator.userAgent.slice(0, 120), created: Date.now() });
-  reg.showNotification('Alerts are on ✿', { body: "We'll let you know a month before anything expires.", icon: 'icons/icon-192.png' });
+  reg.showNotification('Alerts are on ✿', { body: "We'll let you know a month before anything expires.", icon: 'icons/tulip-192.png' });
   el.textContent = 'Alerts are on for this device ✿';
 }
 

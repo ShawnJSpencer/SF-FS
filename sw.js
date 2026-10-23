@@ -1,6 +1,6 @@
 // SF-FS service worker: works offline in the basement, shows alerts.
-const CACHE = 'sffs-v21';
-const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'seed.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon-32.png'];
+const CACHE = 'sffs-v22';
+const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'seed.js', 'manifest.webmanifest', 'icons/tulip-180.png', 'icons/tulip-192.png', 'icons/tulip-512.png', 'icons/tulip-32.png'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
@@ -24,7 +24,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data.json(); } catch { d = { title: 'Food Storage', body: e.data?.text() }; }
   e.waitUntil(Promise.all([
-    self.registration.showNotification(d.title || 'Food Storage', { body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/favicon-32.png', tag: d.tag || 'sffs', data: { url: d.url || './' } }),
+    self.registration.showNotification(d.title || 'Food Storage', { body: d.body || '', icon: 'icons/tulip-192.png', badge: 'icons/tulip-32.png', tag: d.tag || 'sffs', data: { url: d.url || './' } }),
     d.badge != null && self.navigator.setAppBadge ? self.navigator.setAppBadge(d.badge).catch(() => {}) : null
   ]));
 });
