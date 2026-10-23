@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -295,7 +295,7 @@ function row(it) {
   const cls = q === 0 ? 'out' : q < (it.par ?? 1) ? 'low' : '';
   return `<button class="item ${cls}" data-open="${it.id}">${pic(it)}
     <span><div class="nm">${esc(it.name)}</div><div class="meta">${it.loc ? `<span class="loc">${esc(it.loc)}</span>` : ''}${(it.codes || []).length > 1 ? `<span>${it.codes.length} kinds</span>` : ''}${it.brand ? `<span>${esc(it.brand)}</span>` : ''}</div></span>
-    <span class="q"><div class="n">${q || '–'}</div><div class="e ${n <= SOON ? 'soon' : ''}">${s ? (n < 0 ? 'expired' : 'exp ' + fmtExp(s.exp)) : ''}</div></span></button>`;
+    <span class="q"><div class="n">${q}<span class="par"> / ${it.par ?? 1}</span></div><div class="e ${n <= SOON ? 'soon' : ''}">${s ? (n < 0 ? 'expired' : 'exp ' + fmtExp(s.exp)) : ''}</div></span></button>`;
 }
 document.addEventListener('click', e => {
   const o = e.target.closest('[data-open]'); if (o && !o.closest('.sheet')) return openItem(o.dataset.open);
