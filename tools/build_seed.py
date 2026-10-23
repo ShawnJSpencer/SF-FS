@@ -24,7 +24,7 @@ for cname, emoji, rows in SEED:
                     lots.append({"exp": e, "qty": base + (1 if j >= len(use) - extra else 0)})
         for j, l in enumerate(lots): l["id"] = f"l{n}-{j}"
         items.append({"id": f"i{n:03d}", "name": name, "cat": cid, "order": i, "lots": lots,
-                      "par": 1, "loc": "", "img": "", "codes": [], "store": "maceys", "notes": ""})
+                      "par": 1, "loc": "", "img": "", "codes": [], "store": "costco", "notes": ""})
 out = {"cats": cats, "items": items}
 open(sys.argv[1], 'w').write("window.SFFS_SEED = " + json.dumps(out, ensure_ascii=False, separators=(',', ':')) + ";\n")
 print(len(cats), "categories,", len(items), "items,", sum(sum(l['qty'] for l in i['lots']) for i in items), "units")

@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.6';
+const VERSION = '1.3.7';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -111,8 +111,8 @@ const qtyOf = it => (it.lots || []).reduce((a, l) => a + (+l.qty || 0), 0);
 const sortLots = lots => [...(lots || [])].filter(l => l.qty > 0).sort((a, b) => (expDate(a.exp) || 9e15) - (expDate(b.exp) || 9e15));
 const soonest = it => sortLots(it.lots).find(l => l.exp);
 const STORES = {
-  maceys: { name: "Macey's", sub: 'Spanish Fork', home: 'https://www.maceys.com/', q: n => `https://www.google.com/search?q=${encodeURIComponent(n + ' site:maceys.com')}` },
   costco: { name: 'Costco', sub: 'Spanish Fork', home: 'https://www.costco.com/', q: n => `https://www.costco.com/CatalogSearch?keyword=${encodeURIComponent(n)}` },
+  maceys: { name: "Macey's", sub: 'Spanish Fork', home: 'https://www.maceys.com/', q: n => `https://www.google.com/search?q=${encodeURIComponent(n + ' site:maceys.com')}` },
   sams: { name: "Sam's Club", sub: 'Provo', home: 'https://www.samsclub.com/', q: n => `https://www.samsclub.com/s/${encodeURIComponent(n)}` },
   walmart: { name: 'Walmart', sub: 'Spanish Fork', home: 'https://www.walmart.com/store/4068-spanish-fork-ut', q: n => `https://www.walmart.com/search?q=${encodeURIComponent(n)}` }
 };
@@ -261,7 +261,8 @@ async function goCloud() {
     DB.items = new Map(snap.docs.map(d => [d.id, d.data()])); DB.persistLocal(); render();
     setSync(snap.metadata.fromCache ? 'saved, syncing' : 'synced', !snap.metadata.fromCache);
   }));
-  unsubs.push(onSnapshot(doc(db, DB.path()), snap => { if (snap.exists()) { DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render(); } }));
+  unsubs.push(onSnapshot(doc(db, DB.path()), snap => { if (snap.exists() && !snap.metadata.fromCache) { DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render(); switchToCostco(); }
+    else if (snap.exists()) { DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render(); } }));
 }
 function setSync(txt, on = false) {
   const el = $('#syncState'); el.innerHTML = `<span class="dot ${on ? 'on' : ''}"></span><span>${esc(txt)}</span>`;
@@ -416,7 +417,7 @@ function wireShelves(root, get, set) {
 /* ───────────── Item sheet (view / edit / add by hand) ───────────── */
 function openItem(id, preset = {}) {
   const isNew = !id;
-  const d = isNew ? { id: uid(), name: '', cat: activeCat || DB.meta.cats[0].id, lots: [], par: 1, loc: '', img: '', codes: [], store: 'maceys', notes: '', order: 999, ...preset }
+  const d = isNew ? { id: uid(), name: '', cat: activeCat || DB.meta.cats[0].id, lots: [], par: 1, loc: '', img: '', codes: [], store: 'costco', notes: '', order: 999, ...preset }
                   : clone(DB.items.get(id));
   if (!d) return;
   if (isNew && !d.lots.length) d.lots.push({ id: uid('l'), exp: '', qty: 1 });
@@ -818,7 +819,7 @@ function heartShower(fromEl) {
 /* ───────────── Shopping list ───────────── */
 function shoppingData() {
   const need = [...DB.items.values()].map(i => ({ i, have: qtyOf(i), want: i.par ?? 1 })).filter(x => x.have < x.want);
-  const groups = Object.keys(STORES).map(k => ({ k, s: STORES[k], rows: need.filter(x => (x.i.store || 'maceys') === k).sort((a, b) => a.i.name.localeCompare(b.i.name)) })).filter(g => g.rows.length);
+  const groups = Object.keys(STORES).map(k => ({ k, s: STORES[k], rows: need.filter(x => (x.i.store || 'costco') === k).sort((a, b) => a.i.name.localeCompare(b.i.name)) })).filter(g => g.rows.length);
   const soon = []; DB.items.forEach(i => sortLots(i.lots).forEach(l => { const n = daysLeft(l.exp); if (n <= SOON) soon.push({ i, l, n }); }));
   return { need, groups, soon: soon.sort((a, b) => a.n - b.n) };
 }
@@ -835,7 +836,7 @@ function openShop() {
     <div class="acts" style="margin-top:4px;justify-content:flex-start;gap:24px"><button class="link flourish" id="shShare">Share list</button><button class="link flourish" id="shMail">Email it to us now</button></div>
     ${groups.map(g => `<div class="store"><h3>${g.s.name} <a href="${g.s.home}" target="_blank" rel="noopener">${g.s.sub} ↗</a></h3>
       ${g.rows.map(x => `<div class="shop">${pic(x.i)}<span class="nm">${esc(x.i.name)}<small>have ${x.have} · keep ${x.want}${x.i.loc ? ' · ' + esc(x.i.loc) : ''}</small></span>
-      <select data-store="${x.i.id}" style="border:0;background:none;color:var(--muted);font-size:12px;max-width:80px">${Object.entries(STORES).map(([k, s]) => `<option value="${k}" ${k === (x.i.store || 'maceys') ? 'selected' : ''}>${s.name}</option>`).join('')}</select>
+      <select data-store="${x.i.id}" style="border:0;background:none;color:var(--muted);font-size:12px;max-width:80px">${Object.entries(STORES).map(([k, s]) => `<option value="${k}" ${k === (x.i.store || 'costco') ? 'selected' : ''}>${s.name}</option>`).join('')}</select>
       <a href="${g.s.q(x.i.name)}" target="_blank" rel="noopener">find ↗</a></div>`).join('')}</div>`).join('') || '<p class="empty-note">Everything is stocked ✿</p>'}
     ${soon.length ? `<div class="store"><h3 style="color:var(--warn)">Use soon</h3>${soon.map(x => `<div class="shop">${pic(x.i)}<span class="nm">${esc(x.i.name)}<small>${x.n < 0 ? 'expired ' : 'exp '}${fmtExp(x.l.exp)} · ${x.l.qty} there${x.i.loc ? ' · ' + esc(x.i.loc) : ''}</small></span></div>`).join('')}</div>` : ''}`);
   $('#shShare', body).onclick = async () => { const t = shoppingText();
@@ -973,6 +974,26 @@ $('#goUse').onclick = openUsePicker;
 $('#goShop').onclick = openShop;
 $('#goSettings').onclick = openSettings;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// One-time (Oct 2026): Costco became the main store. Every item that said Macey's switches to Costco, once per household.
+async function switchToCostco() {
+  if (DB.meta.storesV2) return;
+  DB.meta.storesV2 = true;
+  if (DB.mode === 'cloud') {
+    const { collection, query, where, getDocs, writeBatch, doc, setDoc } = DB.fb, db = DB.fb.db;
+    try {
+      await setDoc(doc(db, DB.path()), { storesV2: true }, { merge: true });
+      const snap = await getDocs(query(collection(db, DB.path('items')), where('store', '==', 'maceys')));
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const b = writeBatch(db); snap.docs.slice(i, i + 400).forEach(d => b.update(d.ref, { store: 'costco' })); await b.commit();
+      }
+      if (snap.size) toast(`Switched ${snap.size} items to Costco ✿`);
+    } catch (e) { console.warn(e); DB.meta.storesV2 = false; }
+  } else {
+    let n = 0; DB.items.forEach(it => { if (it.store === 'maceys') { it.store = 'costco'; n++; } });
+    DB.persistLocal(); render();
+  }
+}
 DB.loadLocal(); render(); initCloud();
+if (!CFG.firebase) switchToCostco();
 // deep links from notifications: ?view=shop
 if (new URLSearchParams(location.search).get('view') === 'shop') setTimeout(openShop, dev.get('splash', true) ? 3400 : 200);

@@ -16,8 +16,8 @@ const db = admin.firestore();
 const hRef = db.doc(`households/${H}`);
 
 const STORES = {
-  maceys: ["Macey's", n => `https://www.google.com/search?q=${encodeURIComponent(n + ' site:maceys.com')}`],
   costco: ['Costco', n => `https://www.costco.com/CatalogSearch?keyword=${encodeURIComponent(n)}`],
+  maceys: ["Macey's", n => `https://www.google.com/search?q=${encodeURIComponent(n + ' site:maceys.com')}`],
   sams: ["Sam's Club", n => `https://www.samsclub.com/s/${encodeURIComponent(n)}`],
   walmart: ['Walmart', n => `https://www.walmart.com/search?q=${encodeURIComponent(n)}`]
 };
@@ -81,7 +81,7 @@ if (due) {
   const need = items.filter(i => qtyOf(i) < (i.par ?? 1));
   let inner = need.length ? '' : '<p>Everything is stocked ✿</p>';
   for (const [k, [name, q]] of Object.entries(STORES)) {
-    const rows = need.filter(i => (i.store || 'maceys') === k).sort((a, b) => a.name.localeCompare(b.name));
+    const rows = need.filter(i => (i.store || 'costco') === k).sort((a, b) => a.name.localeCompare(b.name));
     if (!rows.length) continue;
     inner += `<div style="font:italic 600 20px Georgia,serif;margin:18px 0 4px">${name}</div><table width="100%" cellspacing="0">` +
       rows.map(i => rowHTML(showImg(i), i.name, `have ${qtyOf(i)} · need ${(i.par ?? 1) - qtyOf(i)}${i.loc ? ' · shelf ' + esc(i.loc) : ''}`, q(i.name))).join('') + '</table>';
