@@ -121,7 +121,11 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
   background:var(--card);border-radius:28px 28px 0 0;padding:10px 22px calc(24px + env(safe-area-inset-bottom));
   transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.9,.25,1);box-shadow:0 -10px 40px -20px rgba(0,0,0,.4)}
 .sheet.show{transform:none}
-.sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--soft);margin:2px auto 12px}
+/* grab handle stays pinned to the top of the window while you scroll */
+.sheet .grabbar{position:sticky;top:-10px;z-index:3;margin:-10px -22px 2px;padding:12px 0 12px;background:var(--card);border-radius:28px 28px 0 0;cursor:grab}
+.sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--accent2);margin:0 auto}
+#syncState.needs{color:var(--warn);font-weight:700;cursor:pointer}
+#syncState.needs .dot{background:var(--warn)}
 .sheet h2{font:italic 600 26px/1.15 Fraunces,serif;margin:4px 0 2px}
 .sheet .sub{color:var(--muted);font-size:14px;margin:0 0 12px}
 .field{display:block;margin:12px 0}
@@ -242,7 +246,7 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
     padding:22px 28px 26px;transform:translate(-50%,-47%) scale(.97);opacity:0;visibility:hidden;pointer-events:none;
     transition:transform .26s cubic-bezier(.2,.9,.25,1),opacity .2s,visibility 0s .26s;box-shadow:0 30px 80px -30px rgba(0,0,0,.45)}
   .sheet.show{transform:translate(-50%,-50%);opacity:1;visibility:visible;pointer-events:auto;transition:transform .26s cubic-bezier(.2,.9,.25,1),opacity .2s}
-  .sheet .grab{display:none}
+  .sheet .grabbar{display:none}
 }
 @media (min-width:1100px){
   main{display:grid;grid-template-columns:minmax(0,1fr) 250px;column-gap:28px;
@@ -337,7 +341,7 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 </nav>
 
 <div class="veil hidden" id="veil"></div>
-<div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheetBody"></div></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grabbar"><div class="grab"></div></div><div id="sheetBody"></div></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="filePick" accept="image/*" class="hidden">
 <input type="file" id="jsonPick" accept="application/json,.json" class="hidden">

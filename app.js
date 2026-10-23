@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.1';
+const VERSION = '1.3.2';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -209,8 +209,18 @@ async function initCloud() {
       import(FB + 'firebase-app.js'), import(FB + 'firebase-auth.js'), import(FB + 'firebase-firestore.js')]);
     const app = initializeApp(CFG.firebase);
     const db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) });
-    DB.fb = { ...auth, ...fs, app, db, auth: auth.getAuth(app) };
-    auth.onAuthStateChanged(DB.fb.auth, user => { DB.user = user; user ? goCloud() : (DB.mode = 'local', setSync('signed out'), render()); });
+    // Remember the sign-in on this device in two places (IndexedDB, then plain storage as a backup),
+    // so app updates never sign you out.
+    let fbAuth;
+    try { fbAuth = auth.initializeAuth(app, { persistence: [auth.indexedDBLocalPersistence, auth.browserLocalPersistence] }); }
+    catch { fbAuth = auth.getAuth(app); }
+    DB.fb = { ...auth, ...fs, app, db, auth: fbAuth };
+    auth.onAuthStateChanged(fbAuth, user => {
+      DB.user = user;
+      if (user) { dev.set('lastEmail', user.email); return goCloud(); }
+      DB.mode = 'local'; unsubs.forEach(u => u()); unsubs = [];
+      setSync(dev.get('lastEmail', '') ? 'tap to sign in' : 'signed out'); render();
+    });
   } catch (e) { console.error(e); setSync('offline'); }
 }
 let unsubs = [];
@@ -248,7 +258,16 @@ async function goCloud() {
   }));
   unsubs.push(onSnapshot(doc(db, DB.path()), snap => { if (snap.exists()) { DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render(); } }));
 }
-function setSync(txt, on = false) { $('#syncState').innerHTML = `<span class="dot ${on ? 'on' : ''}"></span><span>${esc(txt)}</span>`; }
+function setSync(txt, on = false) {
+  const el = $('#syncState'); el.innerHTML = `<span class="dot ${on ? 'on' : ''}"></span><span>${esc(txt)}</span>`;
+  el.classList.toggle('needs', /sign in/.test(txt));
+}
+// Tapping "tap to sign in" goes straight to the sign-in fields, email already filled in
+$('#syncState').addEventListener('click', () => {
+  if (DB.mode === 'cloud' || !CFG.firebase) return;
+  openSettings();
+  setTimeout(() => { const p = $('#stPass'); if (p) { p.scrollIntoView({ block: 'center' }); p.focus(); } }, 350);
+});
 
 /* ───────────── Home ───────────── */
 // Food & freezers A–Z, then Household, then Medicine, then Longterm (new categories slot in alphabetically).
@@ -372,7 +391,7 @@ function closeSheet() {
 $('#veil').onclick = closeSheet;
 // swipe down to close
 (() => { let y0 = null; const sh = $('#sheet');
-  sh.addEventListener('touchstart', e => { y0 = sh.scrollTop <= 0 ? e.touches[0].clientY : null; }, { passive: true });
+  sh.addEventListener('touchstart', e => { y0 = (sh.scrollTop <= 0 || e.target.closest('.grabbar')) ? e.touches[0].clientY : null; }, { passive: true });
   sh.addEventListener('touchend', e => { if (y0 != null && e.changedTouches[0].clientY - y0 > 110) closeSheet(); y0 = null; }, { passive: true }); })();
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
@@ -812,7 +831,7 @@ function openSettings() {
     <div class="setsec">Sync</div>
     ${!CFG.firebase ? `<p class="note">Right now everything lives on this device only. Follow SETUP.md (step 2–3) to sync between phones, iPad and computer.</p>`
       : signedIn ? `<p class="note">Signed in as <b>${esc(DB.user.email)}</b> — changes sync to every device.</p><button class="link mute" id="stOut">sign out</button>`
-      : `<label class="field"><span>Email</span><input id="stEmail" type="email" autocomplete="username"></label>
+      : `<label class="field"><span>Email</span><input id="stEmail" type="email" autocomplete="username" value="${esc(dev.get('lastEmail', ''))}"></label>
          <label class="field"><span>Password</span><input id="stPass" type="password" autocomplete="current-password"></label>
          <div class="acts" style="justify-content:flex-start;gap:24px"><button class="link big flourish" id="stIn">Sign in</button><button class="link" id="stNew">first time? create login</button></div>`}
 
