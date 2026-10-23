@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.2.2';
+const VERSION = '1.2.3';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -611,7 +611,7 @@ function openScanner(opts = {}) {
 }
 async function onCode(raw, opts = {}) {
   await closeScanner();
-  if (/^i love you$/i.test(raw.trim())) return loveNote();
+  if (/^i\s*love\s*you$/i.test(raw.trim())) return loveNote();
   const code = normCode(raw);
   if (opts.attach) return attachKind(opts.attach, code);
   const found = ownerOf(code);
@@ -682,9 +682,67 @@ async function lookup(code) {
   return null;
 }
 function loveNote() {
-  openSheet(`<div style="text-align:center;padding:20px 0 10px">
-    <svg viewBox="0 0 64 64" width="90" height="90"><path d="M32 56S6 40 6 22a13 13 0 0 1 26-4 13 13 0 0 1 26 4c0 18-26 34-26 34Z" fill="var(--tulip1)"/></svg>
-    <h2 style="font-size:34px">I love you too</h2><p class="sub">You found the secret in the barcode ✿</p></div>`);
+  const body = openSheet(`<div style="text-align:center;padding:20px 0 10px">
+    <button id="loveHeart" aria-label="More hearts" style="display:inline-block">
+      <svg viewBox="0 0 64 64" width="96" height="96"><path d="M32 56S6 40 6 22a13 13 0 0 1 26-4 13 13 0 0 1 26 4c0 18-26 34-26 34Z" style="fill:var(--tulip1)"/></svg></button>
+    <h2 style="font-size:36px">I love you Hun!</h2><p class="sub">You found the secret in the barcode ✿</p></div>`);
+  const heart = $('#loveHeart', body);
+  heart.onclick = () => heartShower(heart);
+  setTimeout(() => heartShower(heart), 380);   // after the window slides up
+}
+
+// Hearts burst up out of the window, then shower down over the whole screen.
+// (No broken or mending hearts.)
+const HEARTS = ['❤️', '🧡', '💛', '💚', '💙', '💜', '🩷', '🩵', '🤍', '💖', '💗', '💓', '💕', '💞', '💘', '💝', '❣️', '💟', '😍', '🥰'];
+function heartShower(fromEl) {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cv = document.createElement('canvas');
+  cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:80;pointer-events:none';
+  document.body.append(cv);
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  // draw each emoji once, then stamp copies (keeps it smooth on phones)
+  const sprites = HEARTS.map(h => { const c = document.createElement('canvas'); c.width = c.height = 72;
+    const x = c.getContext('2d'); x.font = '56px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(h, 36, 40); return c; });
+  const r = fromEl?.getBoundingClientRect(), ox = r ? r.left + r.width / 2 : W / 2, oy = r ? r.top + r.height / 2 : H * .6;
+  const pick = () => sprites[Math.floor(Math.random() * sprites.length)];
+  const parts = [];
+  // 1) fountain out of the pop-up
+  const burst = reduce ? 0 : Math.round(Math.min(110, 50 + W / 8));
+  for (let i = 0; i < burst; i++) {
+    const a = -Math.PI / 2 + (Math.random() - .5) * 1.5, sp = (H * 1.05 + Math.random() * H * .7);
+    parts.push({ x: ox, y: oy, vx: Math.cos(a) * sp * .55, vy: Math.sin(a) * sp, t0: Math.random() * .45, s: 22 + Math.random() * 22,
+      rot: (Math.random() - .5) * .6, vr: (Math.random() - .5) * 3, img: pick(), sway: Math.random() * 6 });
+  }
+  // 2) rain from the top across the whole screen
+  const rain = reduce ? 40 : Math.round(Math.min(130, 60 + W / 6));
+  for (let i = 0; i < rain; i++) {
+    parts.push({ x: Math.random() * W, y: -40 - Math.random() * 60, vx: (Math.random() - .5) * 40, vy: 60 + Math.random() * 120,
+      t0: (reduce ? 0 : .7) + Math.random() * 1.6, s: 18 + Math.random() * 24, rot: (Math.random() - .5) * .6, vr: (Math.random() - .5) * 2,
+      img: pick(), sway: Math.random() * 6, rain: true });
+  }
+  const G = H * 1.1, start = performance.now(), END = 5.2;
+  (function frame(now) {
+    const t = (now - start) / 1000; ctx.clearRect(0, 0, W, H);
+    let alive = 0;
+    for (const p of parts) {
+      const dt = t - p.t0; if (dt < 0) { alive++; continue; }
+      const drag = p.rain ? 1 : 1 / (1 + dt * .9);
+      const x = p.x + p.vx * dt * drag + Math.sin(dt * 2.4 + p.sway) * (p.rain ? 18 : 10) * Math.min(1, dt);
+      const vyTerm = p.rain ? p.vy * dt + .5 * G * .35 * dt * dt : p.vy * dt * drag + .5 * G * dt * dt;
+      const y = p.y + vyTerm;
+      if (y > H + 60) continue;
+      alive++;
+      const fade = Math.min(1, dt * 6) * Math.min(1, (END - t) / .6);
+      if (fade <= 0) continue;
+      ctx.save(); ctx.globalAlpha = Math.max(0, fade); ctx.translate(x, y); ctx.rotate(p.rot + p.vr * dt);
+      ctx.drawImage(p.img, -p.s / 2, -p.s / 2, p.s, p.s); ctx.restore();
+    }
+    if (alive && t < END) requestAnimationFrame(frame); else cv.remove();
+  })(start);
+  navigator.vibrate?.([20, 40, 20]);
 }
 
 /* ───────────── Shopping list ───────────── */
