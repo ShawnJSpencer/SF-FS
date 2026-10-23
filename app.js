@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.2';
+const VERSION = '1.3.3';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -297,7 +297,7 @@ function render() {
   const byCat = new Map(cats.map(c => [c.id, []]));
   items.forEach(it => { if (!q || (it.name + ' ' + (it.loc || '') + ' ' + (it.brand || '')).toLowerCase().includes(q)) (byCat.get(it.cat) || byCat.set(it.cat, []).get(it.cat)).push(it); });
   const html = cats.map(c => {
-    const list = (byCat.get(c.id) || []).sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name));
+    const list = (byCat.get(c.id) || []).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));   // A–Z
     if (!list.length) return q ? '' : `<section class="cat" id="cat-${c.id}"><h2>${esc(c.name)}</h2><p class="note">Nothing here yet.</p></section>`;
     const units = list.reduce((a, i) => a + qtyOf(i), 0);
     return `<section class="cat" id="cat-${c.id}"><h2>${esc(c.name)} <small>${units} on hand</small></h2><div class="items">${list.map(row).join('')}</div></section>`;
