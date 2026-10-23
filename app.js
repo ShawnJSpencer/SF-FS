@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.10';
+const VERSION = '1.4.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -678,22 +678,50 @@ function openUsePicker() {
 let scanner = null;
 async function closeScanner() { if (scanner) { const s = scanner; scanner = null; try { await s.stop(); s.clear(); } catch {} } }
 let scanBusy = false;
+// iPhone Pro cameras: the normal 1× lens can't focus up close, so by default we open the
+// ultra-wide (the 0.5× / macro lens), which focuses a few cm away. Remembered per device.
+const pickCam = (cams, mode) => {
+  const back = cams.filter(c => /back|rear|environment/i.test(c.label));
+  if (mode === 'close') return back.find(c => /ultra\s*wide/i.test(c.label)) || null;
+  return back.find(c => /^back camera$/i.test(c.label)) || back.find(c => /triple|dual/i.test(c.label)) || back[0] || null;
+};
+let scanRun = 0, camList = null;
 function openScanner(opts = {}) {
   scanBusy = false;
   const target = opts.attach && DB.items.get(opts.attach);
   const body = openSheet(`<h2>${target ? 'Scan the other kind' : 'Scan a barcode'}</h2><p class="sub">${target ? `It'll count as <b>${esc(target.name)}</b>.` : 'Hold the code inside the frame.'}</p>
     <div id="reader"></div>
+    <div class="lens hidden" id="lens"><button data-lens="close">Close-up <small>0.5×</small></button><span>·</span><button data-lens="normal">Normal <small>1×</small></button></div>
     <div class="cols" style="align-items:end"><label class="field"><span>Or type the number</span><input id="typed" inputmode="numeric" placeholder="0 12345 67890 5"></label>
     <button class="link" id="typedGo" style="margin-bottom:18px">look it up</button></div>`);
   $('#typedGo', body).onclick = () => { const v = $('#typed', body).value.replace(/\s/g, ''); if (v) onCode(v, opts); };
-  const start = () => {
+  const showLens = mode => { $$('#lens [data-lens]', body).forEach(b => b.classList.toggle('on', b.dataset.lens === mode)); };
+  const start = async () => {
     if (!window.Html5Qrcode) return setTimeout(start, 200);
+    const run = ++scanRun;
     const F = window.Html5QrcodeSupportedFormats;
+    let mode = dev.get('lens', null), cam = null;
+    try {
+      if (!camList) camList = await Html5Qrcode.getCameras();    // names are only visible after camera permission
+      if (run !== scanRun || !$('#reader', body)) return;          // window closed meanwhile
+      const hasClose = !!pickCam(camList, 'close');
+      $('#lens', body).classList.toggle('hidden', !hasClose);
+      // Pro iPhones (three back cameras) have a macro ultra-wide; on others it can't focus close, so start on normal
+      if (!mode) mode = hasClose && camList.some(c => /triple/i.test(c.label)) ? 'close' : 'normal';
+      if (!hasClose) mode = 'normal';
+      cam = pickCam(camList, mode);
+      showLens(mode);
+    } catch { /* fall back to whatever back camera Safari picks */ }
     scanner = new Html5Qrcode('reader', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE], verbose: false,
       experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
-    scanner.start({ facingMode: 'environment' }, { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * .86), height: Math.floor(Math.min(h, w) * .45) }), aspectRatio: 1.333 },
+    scanner.start(cam ? cam.id : { facingMode: 'environment' }, { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * .86), height: Math.floor(Math.min(h, w) * .45) }), aspectRatio: 1.333 },
       text => { if (scanBusy) return; scanBusy = true; navigator.vibrate?.(30); onCode(text, opts); }, () => {})
-      .catch(() => { $('#reader', body).innerHTML = `<p class="note" style="color:#fff;padding:20px">Camera isn't available here. Allow camera access, or type the number below.</p>`; });
+      .catch(() => { if ($('#reader', body)) $('#reader', body).innerHTML = `<p class="note" style="color:#fff;padding:20px">Camera isn't available here. Allow camera access, or type the number below.</p>`; });
+  };
+  $('#lens', body).onclick = async e => {
+    const b = e.target.closest('[data-lens]'); if (!b || b.classList.contains('on')) return;
+    dev.set('lens', b.dataset.lens); showLens(b.dataset.lens);
+    await closeScanner(); $('#reader', body).innerHTML = ''; start();
   };
   start();
 }
