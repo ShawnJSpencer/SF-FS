@@ -125,6 +125,16 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .sheet .grabbar{position:sticky;top:-10px;z-index:3;margin:-10px -22px 2px;padding:12px 0 12px;background:var(--card);border-radius:28px 28px 0 0;cursor:grab}
 .sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--accent2);margin:0 auto}
 #syncState.needs{color:var(--warn);font-weight:700;cursor:pointer}
+/* Use: full A–Z list with a letter bar on the right */
+.upsearch{position:sticky;top:19px;z-index:2;background:var(--card);padding:4px 0 6px;margin-bottom:4px}
+.upwrap{display:grid;grid-template-columns:minmax(0,1fr) 26px;gap:4px;align-items:start}
+.upwrap .sugg{margin:0}
+.lh{font:italic 600 18px Fraunces,serif;color:var(--accent);padding:12px 0 2px;border-bottom:1.5px solid var(--soft)}
+.az{position:sticky;top:110px;display:flex;flex-direction:column;align-items:center;touch-action:none;user-select:none;-webkit-user-select:none;padding:4px 0}
+.az button{font:700 12px/1 Quicksand,sans-serif;color:var(--accent);padding:2.5px 6px;width:100%}
+.az button:disabled{color:var(--soft)}
+.az.on{background:var(--soft);border-radius:13px}
+@media (min-width:700px){.upsearch{top:-22px;padding-top:10px}.az{top:80px}}
 #syncState.needs .dot{background:var(--warn)}
 .sheet h2{font:italic 600 26px/1.15 Fraunces,serif;margin:4px 0 2px}
 .sheet .sub{color:var(--muted);font-size:14px;margin:0 0 12px}

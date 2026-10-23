@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.3.3';
+const VERSION = '1.3.4';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -614,13 +614,40 @@ function openTakeOut(id, code = '') {
 }
 function openUsePicker() {
   const body = openSheet(`<h2>What are you using?</h2><p class="sub">Or scan it — the barcode works for this too.</p>
-    <label class="field"><span>Find it</span><input id="upQ" type="search" placeholder="Cheerios, flour…" autocomplete="off"></label><div class="sugg" id="upList"></div>`);
-  const draw = () => { const q = $('#upQ', body).value.toLowerCase();
-    const list = [...DB.items.values()].filter(i => qtyOf(i) > 0 && (!q || i.name.toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 40);
-    $('#upList', body).innerHTML = list.map(i => `<button data-take="${i.id}">${esc(i.name)} <small>· ${qtyOf(i)} ${i.loc ? '· ' + esc(i.loc) : ''}</small></button>`).join('') || '<p class="note">Nothing found.</p>'; };
+    <div class="upsearch"><label class="field" style="margin:0"><span>Find it</span><input id="upQ" type="search" placeholder="Cheerios, flour…" autocomplete="off"></label></div>
+    <div class="upwrap"><div class="sugg" id="upList"></div><nav class="az" id="upAZ" aria-label="Jump to letter"></nav></div>`);
+  const sheet = $('#sheet'), LET = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
+  const letterOf = n => { const c = (n.trim()[0] || '#').toUpperCase(); return /[A-Z]/.test(c) ? c : '#'; };
+  const draw = () => {
+    const q = $('#upQ', body).value.toLowerCase();
+    const list = [...DB.items.values()].filter(i => qtyOf(i) > 0 && (!q || i.name.toLowerCase().includes(q)))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+    const groups = new Map();
+    list.forEach(i => { const L = letterOf(i.name); (groups.get(L) || groups.set(L, []).get(L)).push(i); });
+    const order = LET.filter(L => groups.has(L));
+    $('#upList', body).innerHTML = order.map(L => `<div class="lh" id="up-${L === '#' ? 'num' : L}">${L}</div>` +
+      groups.get(L).map(i => `<button data-take="${i.id}">${esc(i.name)} <small>· ${qtyOf(i)}${i.loc ? ' · ' + esc(i.loc) : ''} · ${esc(DB.meta.cats.find(c => c.id === i.cat)?.name || '')}</small></button>`).join('')).join('')
+      || '<p class="note">Nothing on the shelf matches that.</p>';
+    $('#upAZ', body).innerHTML = LET.map(L => `<button data-l="${L}" ${groups.has(L) ? '' : 'disabled'}>${L}</button>`).join('');
+  };
   draw(); $('#upQ', body).oninput = draw;
   $('#upList', body).onclick = e => { const b = e.target.closest('[data-take]'); if (b) openTakeOut(b.dataset.take); };
-  setTimeout(() => $('#upQ', body)?.focus(), 350);
+  // A–Z bar: tap a letter, or slide a finger along it
+  let lastL = '';
+  const jump = L => {
+    if (!L || L === lastL) return; lastL = L;
+    const el = $('#up-' + (L === '#' ? 'num' : L), body); if (!el) return;
+    const under = $('.upsearch', body).getBoundingClientRect().bottom;
+    sheet.scrollTop += el.getBoundingClientRect().top - under - 4;
+    navigator.vibrate?.(6);
+  };
+  const az = $('#upAZ', body);
+  const fromPoint = e => { const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('#upAZ [data-l]'); return t && !t.disabled ? t.dataset.l : null; };
+  az.addEventListener('pointerdown', e => { e.preventDefault(); az.setPointerCapture?.(e.pointerId); lastL = ''; jump(fromPoint(e)); az.classList.add('on'); });
+  az.addEventListener('pointermove', e => { if (az.classList.contains('on')) jump(fromPoint(e)); });
+  const up = () => az.classList.remove('on');
+  az.addEventListener('pointerup', up); az.addEventListener('pointercancel', up);
+  if (wide()) setTimeout(() => $('#upQ', body)?.focus(), 350);   // on phones, don't pop the keyboard over the list
 }
 
 /* ───────────── Scanner ───────────── */
