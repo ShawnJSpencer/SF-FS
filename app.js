@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -153,7 +153,7 @@ const pic = (it, cls = 'thumb') => showImg(it) ? `<img class="${cls}" src="${esc
 const DEFAULT_META = () => ({
   cats: SEED.cats,
   shelves: 'ABCDEF'.split('').map(id => ({ id, rows: 5 })),
-  emails: ['shawn@spencerfam.com', ''],
+  emails: ['shawn@spencerfam.com', 'kinzspencer@gmail.com'],
   reportDay: 6, reportHour: 8, reportRequested: false, familySize: 4
 });
 const DB = {
@@ -306,7 +306,11 @@ async function goCloud() {
   unsubs.push(onSnapshot(doc(db, DB.path()), live, snap => {
     if (!snap.exists()) return;
     DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render();
-    if (!snap.metadata.fromCache) switchToCostco();   // only once we've heard from the cloud
+    if (!snap.metadata.fromCache) {   // only once we've heard from the cloud
+      switchToCostco();
+      const em = DB.meta.emails || [];
+      if (!em[1]) DB.saveMeta({ emails: [em[0] || 'shawn@spencerfam.com', 'kinzspencer@gmail.com'] });
+    }
   }));
 }
 function setSync(txt, on = false) {

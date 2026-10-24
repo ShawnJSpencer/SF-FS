@@ -21,7 +21,7 @@ The app works the moment it's on GitHub Pages (on one device). Steps 2–5 turn 
    Copy the `firebaseConfig` block it shows into `config.js` (replace `firebase: null`).
 
 ## 3. Lock it to the two of you
-1. Open `firestore.rules`, replace `WIFE_EMAIL_HERE` with her email.
+1. `firestore.rules` already lists both of our emails (shawn@spencerfam.com and kinzspencer@gmail.com).
 2. Firebase → **Firestore → Rules** → paste the whole file → **Publish**.
 3. In the app: **settings → Sync → "first time? create login"** with your email + a password.
    The first sign-in uploads her tracker (all 232 items). Your wife then creates her own login the same way on her phone.

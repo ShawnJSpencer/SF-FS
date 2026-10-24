@@ -57,9 +57,11 @@ addEventListener('keydown', e => { if (e.key === 'Escape' && bloom.classList.con
 /* ═════════════════ Data ═════════════════ */
 const LASTS = ['household', 'medicine', 'longterm'];
 const isEveryday = cat => !LASTS.includes(cat);
+// What we call each other in the app
+const NAMES = { 'shawn@spencerfam.com': 'Shawn', 'kinzspencer@gmail.com': 'Kenzie' };
 const nameOf = who => {
+  if (NAMES[(who || '').toLowerCase()]) return NAMES[who.toLowerCase()];
   if (!who || who === 'this device') return 'This device';
-  if (who === 'mrs.spencer@family') return 'Mrs. Spencer';
   const local = who.split('@')[0].replace(/[._-]+/g, ' ');
   return local.charAt(0).toUpperCase() + local.slice(1);
 };
@@ -75,7 +77,7 @@ function sampleLog() {
   const RATE = { snacks: 3, cereal: 2.5, 'milk-juice': 2, pasta: 1.6, meals: 1.6, baking: 1, condiments: .9, 'chest-freezer': 1.8, 'upright-freezer': 1.6,
     vegetables: 1, fruits: 1, beans: .7, soup: .7, meat: .5, mixes: .6, grains: .6, household: 1.6, medicine: .3, longterm: .05 };
   const people = (DB.meta.emails || []).filter(Boolean);
-  const A = people[0] || 'shawn@spencerfam.com', B = people[1] || 'mrs.spencer@family';
+  const A = people[0] || 'shawn@spencerfam.com', B = people[1] || 'kinzspencer@gmail.com';
   const now = Date.now(), DAYS = 180, ev = [];
   for (const it of DB.items.values()) {
     if (rnd() < .3) continue;                                   // plenty of items barely move

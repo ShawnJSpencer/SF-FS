@@ -5,7 +5,7 @@ service cloud.firestore {
     function family() {
       return request.auth != null && request.auth.token.email.lower() in [
         'shawn@spencerfam.com',
-        'WIFE_EMAIL_HERE'
+        'kinzspencer@gmail.com'
       ];
     }
     match /households/{h} {
