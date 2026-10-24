@@ -226,6 +226,9 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .sm-col.floor .sm-cell{width:120px}
 .sm-lbl{font:italic 600 16px Fraunces,serif}
 /* Use: full A–Z list with a letter bar on the right */
+/* Save / cancel (and scanner back/close) stay pinned at the top of the window */
+.sheetbar{position:sticky;top:19px;z-index:2;background:var(--card);display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 0 8px;margin-bottom:2px;border-bottom:1px dashed var(--soft)}
+.sheetbar .link.big{font-size:22px}
 .upsearch{position:sticky;top:19px;z-index:2;background:var(--card);padding:4px 0 6px;margin-bottom:4px}
 .upwrap{display:grid;grid-template-columns:minmax(0,1fr) 26px;gap:4px;align-items:start}
 .upwrap .sugg{margin:0}
@@ -234,7 +237,7 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .az button{font:700 12px/1 Quicksand,sans-serif;color:var(--accent);padding:2.5px 6px;width:100%}
 .az button:disabled{color:var(--soft)}
 .az.on{background:var(--soft);border-radius:13px}
-@media (min-width:700px){.upsearch{top:-22px;padding-top:10px}.az{top:80px}}
+@media (min-width:700px){.upsearch{top:-22px;padding-top:10px}.az{top:80px}.sheetbar{top:-22px;padding-top:12px;margin-top:-12px}}
 #syncState.needs .dot{background:var(--warn)}
 .sheet h2{font:italic 600 26px/1.15 Fraunces,serif;margin:4px 0 2px}
 .sheet .sub{color:var(--muted);font-size:14px;margin:0 0 12px}

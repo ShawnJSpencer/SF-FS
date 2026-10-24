@@ -1,5 +1,5 @@
 // SF-FS service worker: works offline in the basement, shows alerts.
-const CACHE = 'sffs-v25';
+const CACHE = 'sffs-v26';
 const SHELL = ['./', 'index.html', 'app.js', 'insights.js', 'config.js', 'seed.js', 'manifest.webmanifest', 'icons/tulip-180.png', 'icons/tulip-192.png', 'icons/tulip-512.png', 'icons/tulip-32.png'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });

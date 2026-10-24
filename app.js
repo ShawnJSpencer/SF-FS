@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.5.1';
+const VERSION = '1.5.2';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -357,8 +357,10 @@ function render() {
     const units = list.reduce((a, i) => a + qtyOf(i), 0);
     return `<section class="cat" id="cat-${c.id}"><h2>${esc(c.name)} <small>${units} on hand</small></h2><div class="items">${list.map(row).join('')}</div></section>`;
   }).join('');
+  const sc = $('#scroller'), keep = sc.scrollTop;
   $('#list').innerHTML = html || `<p class="empty-note">Nothing matches “${esc(query)}”.<br><button class="link" id="addFromSearch">Add it ✿</button></p>`;
   layoutCards();
+  sc.scrollTop = homeScroll ?? keep;   // redrawing the list never jumps you to the top
   // shopping badge + app icon badge
   const need = items.filter(i => qtyOf(i) < (i.par ?? 1)).length;
   $('#shopBadge').textContent = need; $('#shopBadge').classList.toggle('hidden', !need);
@@ -430,8 +432,10 @@ addEventListener('resize', () => { if (Math.abs(innerWidth - lastW) > 40) { last
 
 /* ───────────── Sheets ───────────── */
 let onSheetClose = null;
+let homeScroll = null;   // where the home list was when the first window opened
 function openSheet(html, onClose, size) {
   closeScanner();
+  if (!$('#sheet').classList.contains('show') && homeScroll == null) homeScroll = $('#scroller').scrollTop;
   $('#sheet').classList.toggle('big', size === 'big');
   // a brand-new container each time, so tap handlers from the last window can't linger
   const old = $('#sheetBody'), fresh = old.cloneNode(false); old.replaceWith(fresh);
@@ -444,7 +448,11 @@ function closeSheet() {
   document.activeElement?.blur?.();
   closeScanner(); onSheetClose?.(); onSheetClose = null;
   $('#veil').classList.remove('show'); $('#sheet').classList.remove('show');
-  setTimeout(() => { if (!$('#sheet').classList.contains('show')) $('#veil').classList.add('hidden'); }, 300);
+  const y = homeScroll, back = () => { if (y != null) $('#scroller').scrollTop = y; };
+  requestAnimationFrame(back);
+  setTimeout(() => {
+    if (!$('#sheet').classList.contains('show')) { $('#veil').classList.add('hidden'); back(); homeScroll = null; }
+  }, 340);
 }
 $('#veil').onclick = closeSheet;
 // swipe down to close
@@ -476,6 +484,7 @@ function openItem(id, preset = {}) {
   if (isNew && !d.lots.length) d.lots.push({ id: uid('l'), exp: '', qty: 1 });
   d.lots.sort((x, y) => (expDate(x.exp) || 9e15) - (expDate(y.exp) || 9e15));   // soonest first, like the picture
   const body = openSheet(`
+    <div class="sheetbar"><button class="link mute" id="fCancel">cancel</button><button class="link big flourish" id="fSave">${isNew ? 'Add it' : 'Save'}</button></div>
     <div class="hero">
       <button class="picwrap" id="pickPic"></button>
       <div style="flex:1;min-width:0">
@@ -506,10 +515,7 @@ function openItem(id, preset = {}) {
       <button class="link" id="fTypedGo" style="margin-bottom:18px">add</button></div>
     <label class="field ${d.cat === 'longterm' ? '' : 'hidden'}" id="fServRow"><span>Servings per package</span><input id="fServ" type="number" inputmode="numeric" min="0" value="${esc(d.servings ?? servingsGuess(d) ?? '')}" placeholder="e.g. 124"></label>
     <label class="field"><span>Notes</span><input id="fNotes" value="${esc(d.notes || '')}"></label>
-    <div class="acts">
-      ${isNew ? '<span></span>' : '<button class="link warn" id="fDel">remove item</button>'}
-      <span style="display:flex;gap:22px"><button class="link mute" id="fCancel">cancel</button><button class="link big flourish" id="fSave">${isNew ? 'Add it' : 'Save'}</button></span>
-    </div>`);
+    ${isNew ? '' : '<div class="acts"><button class="link warn" id="fDel">remove item</button></div>'}`);
   const drawLots = () => {
     const lots = d.lots;
     $('#fLots', body).innerHTML = lots.length ? lots.map((l, i) => { const n = daysLeft(l.exp);
@@ -763,11 +769,16 @@ let scanRun = 0, camList = null;
 function openScanner(opts = {}) {
   scanBusy = false;
   const target = opts.attach && DB.items.get(opts.attach);
-  const body = openSheet(`<h2>${target ? 'Scan the other kind' : 'Scan a barcode'}</h2><p class="sub">${target ? `It'll count as <b>${esc(target.name)}</b>.` : 'Hold the code inside the frame.'}</p>
+  const body = openSheet(`<div class="sheetbar">${target ? `<button class="link" id="scBack">‹ back to ${esc(target.name)}</button><span></span>` : `<span></span><button class="link mute" id="scClose">close</button>`}</div>
+    <h2>${target ? 'Scan the other kind' : 'Scan a barcode'}</h2><p class="sub">${target ? `It'll count as <b>${esc(target.name)}</b>.` : 'Hold the code inside the frame.'}</p>
     <div id="reader"></div>
     <div class="lens hidden" id="lens"><button data-lens="close">Close-up <small>0.5×</small></button><span>·</span><button data-lens="normal">Normal <small>1×</small></button></div>
     <div class="cols" style="align-items:end"><label class="field"><span>Or type the number</span><input id="typed" inputmode="numeric" placeholder="0 12345 67890 5"></label>
-    <button class="link" id="typedGo" style="margin-bottom:18px">look it up</button></div>`);
+    <button class="link" id="typedGo" style="margin-bottom:18px">look it up</button></div>`,
+    // closing the scanner that was opened from an item card goes back to that card
+    target ? () => setTimeout(() => openItem(target.id), 340) : null);
+  if (target) $('#scBack', body).onclick = () => openItem(target.id);
+  else $('#scClose', body).onclick = closeSheet;
   $('#typedGo', body).onclick = () => { const v = $('#typed', body).value.replace(/\s/g, ''); if (v) onCode(v, opts); };
   const showLens = mode => { $$('#lens [data-lens]', body).forEach(b => b.classList.toggle('on', b.dataset.lens === mode)); };
   const start = async () => {
