@@ -226,6 +226,23 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .sm-col.floor .sm-cell{width:120px}
 .sm-lbl{font:italic 600 16px Fraunces,serif}
 /* Use: full A–Z list with a letter bar on the right */
+/* photo options window */
+.pp{position:fixed;inset:0;z-index:55;display:grid;place-items:center;padding:16px}
+.pp-veil{position:absolute;inset:0;background:rgba(40,25,35,.35);opacity:0;transition:opacity .18s}
+.pp-card{position:relative;width:min(420px,100%);max-height:86dvh;overflow:auto;background:var(--card);border-radius:24px;padding:16px 22px 18px;
+  box-shadow:0 24px 60px -24px rgba(0,0,0,.5);transform:translateY(10px) scale(.97);opacity:0;transition:transform .2s cubic-bezier(.2,.9,.25,1),opacity .18s}
+.pp.on .pp-veil{opacity:1}
+.pp.on .pp-card{transform:none;opacity:1}
+.pp-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed var(--soft);padding-bottom:6px}
+.pp-head h3{font:italic 600 21px Fraunces,serif;margin:0}
+.pp-x{width:36px;height:36px;border-radius:50%;background:var(--soft);font-size:16px;font-weight:700;color:var(--ink)}
+.pp .choice{margin:14px 0 4px}
+/* password eye */
+.pw{position:relative;display:block}
+.pw input{padding-right:40px!important}
+.eye{position:absolute;right:0;top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;color:var(--muted)}
+.eye svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.eye .slash{display:none} .eye.on{color:var(--accent)} .eye.on .slash{display:inline}
 /* Save / cancel (and scanner back/close) stay pinned at the top of the window */
 .sheetbar{position:sticky;top:19px;z-index:2;background:var(--card);display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 0 8px;margin-bottom:2px;border-bottom:1px dashed var(--soft)}
 .sheetbar .link.big{font-size:22px}
@@ -470,6 +487,7 @@ html.splashing,html.splashing body{background:var(--splash)}
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grabbar"><div class="grab"></div></div><div id="sheetBody"></div></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="filePick" accept="image/*" class="hidden">
+<input type="file" id="camPick" accept="image/*" capture="environment" class="hidden">
 <input type="file" id="jsonPick" accept="application/json,.json" class="hidden">
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js" defer></script>

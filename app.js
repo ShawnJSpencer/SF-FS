@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -624,10 +624,12 @@ function mergeLots(lots) {
 
 /* photo: camera / library / paste a web link / search the web */
 let filePickCb = null;
-$('#filePick').addEventListener('change', async e => {
+const onPicked = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f || !filePickCb) return;
   filePickCb(await shrink(f));
-});
+};
+$('#filePick').addEventListener('change', onPicked);
+$('#camPick').addEventListener('change', onPicked);
 function shrink(file, max = 420) {
   return new Promise(res => { const img = new Image(); img.onload = () => {
     const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
@@ -635,20 +637,37 @@ function shrink(file, max = 420) {
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); res(c.toDataURL('image/jpeg', .72)); };
     img.src = URL.createObjectURL(file); });
 }
+// Photo options open in their own little window on top (with an ✕), so they can't be missed.
 function choosePhoto(name, cb, anchor, onRemove) {
-  const pop = document.createElement('div');
-  pop.className = 'choice';
-  pop.innerHTML = `<button class="link big" data-a="file">Take or choose a photo</button>
-    <button class="link big" data-a="url">Paste a picture link<small>long-press a picture online → Copy Image Address</small></button>
-    <button class="link big" data-a="web">Find one online<small>opens a picture search for “${esc(name || 'this')}”</small></button>
-    ${onRemove ? '<button class="link warn" data-a="rm">Remove this photo</button>' : ''}`;
-  const host = anchor instanceof Element ? anchor : $('#sheetBody .hero');
-  const old = $('#sheetBody .choice.photo'); if (old) { const same = old.previousElementSibling === host; old.remove(); if (same) return; }
-  pop.classList.add('photo'); host.after(pop);
-  pop.onclick = e => { const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-    if (a === 'file') { filePickCb = u => { cb(u); pop.remove(); }; $('#filePick').click(); }
-    if (a === 'url') { const u = prompt('Paste the picture link'); if (u && /^https?:\/\//.test(u.trim())) { cb(u.trim()); pop.remove(); } }
-    if (a === 'rm') { onRemove(); pop.remove(); return; }
+  $('#photoPop')?.remove();
+  const pp = document.createElement('div');
+  pp.id = 'photoPop'; pp.className = 'pp';
+  pp.innerHTML = `<div class="pp-veil"></div>
+    <div class="pp-card" role="dialog" aria-modal="true" aria-label="Photo">
+      <div class="pp-head"><h3>${onRemove ? 'Change the photo' : 'Add a photo'}</h3><button class="pp-x" data-a="x" aria-label="Close">✕</button></div>
+      <div class="choice">
+        <button class="link big" data-a="cam">Take a photo</button>
+        <button class="link big" data-a="lib">Choose from my photos</button>
+        <button class="link big" data-a="url">Paste a picture link<small>long-press a picture online → Copy Image Address</small></button>
+        <div class="cols hidden" id="ppUrlRow" style="align-items:end;margin-top:-6px"><label class="field" style="margin:0"><span>Picture link</span><input id="ppUrl" type="url" placeholder="https://…" autocomplete="off"></label>
+          <button class="link" data-a="urlgo" style="margin-bottom:8px">use it</button></div>
+        <button class="link big" data-a="web">Find one online<small>opens a picture search for “${esc(name || 'this')}”</small></button>
+        ${onRemove ? '<button class="link warn" data-a="rm">Remove this photo</button>' : ''}
+      </div>
+    </div>`;
+  document.body.append(pp);
+  requestAnimationFrame(() => pp.classList.add('on'));
+  const close = () => { pp.classList.remove('on'); setTimeout(() => pp.remove(), 200); };
+  const done = u => { cb(u); close(); };
+  pp.onclick = e => {
+    if (e.target.classList.contains('pp-veil')) return close();
+    const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+    if (a === 'x') return close();
+    if (a === 'cam') { filePickCb = done; $('#camPick').click(); }
+    if (a === 'lib') { filePickCb = done; $('#filePick').click(); }
+    if (a === 'url') { $('#ppUrlRow', pp).classList.toggle('hidden'); $('#ppUrl', pp).focus(); }
+    if (a === 'urlgo') { const u = $('#ppUrl', pp).value.trim(); if (/^https?:\/\//.test(u)) done(u); else toast('That link should start with https://'); }
+    if (a === 'rm') { onRemove(); close(); }
     if (a === 'web') window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent((name || '') + ' package')}`, '_blank');
   };
 }
@@ -1084,7 +1103,8 @@ function openSettings() {
     ${!CFG.firebase ? `<p class="note">Right now everything lives on this device only. Follow SETUP.md (step 2–3) to sync between phones, iPad and computer.</p>`
       : signedIn ? `<p class="note">Signed in as <b>${esc(DB.user.email)}</b> — changes sync to every device.</p><button class="link mute" id="stOut">sign out</button>`
       : `<label class="field"><span>Email</span><input id="stEmail" type="email" autocomplete="username" value="${esc(dev.get('lastEmail', ''))}"></label>
-         <label class="field"><span>Password</span><input id="stPass" type="password" autocomplete="current-password"></label>
+         <label class="field"><span>Password</span><span class="pw"><input id="stPass" type="password" autocomplete="current-password">
+           <button type="button" class="eye" id="stEye" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M4 4l16 16"/></svg></button></span></label>
          <div class="acts" style="justify-content:flex-start;gap:24px"><button class="link big flourish" id="stIn">Sign in</button><button class="link" id="stNew">first time? create login</button></div>`}
 
     <div class="setsec">Alerts</div>
@@ -1149,6 +1169,11 @@ function openSettings() {
       try { await (create ? DB.fb.createUserWithEmailAndPassword : DB.fb.signInWithEmailAndPassword)(DB.fb.auth, em, pw); closeSheet(); toast('Welcome ✿'); }
       catch (err) { toast(err.code?.replace('auth/', '').replace(/-/g, ' ') || 'Could not sign in'); } };
     $('#stIn', body).onclick = () => go(false); $('#stNew', body).onclick = () => go(true);
+    $('#stEye', body).onclick = e => {
+      const p = $('#stPass', body), show = p.type === 'password';
+      p.type = show ? 'text' : 'password'; e.currentTarget.classList.toggle('on', show);
+      e.currentTarget.setAttribute('aria-pressed', show); e.currentTarget.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    };
   }
   if (signedIn) $('#stOut', body).onclick = async () => { unsubs.forEach(u => u()); await DB.fb.signOut(DB.fb.auth); closeSheet(); };
   $('#stPush', body).onclick = () => enablePush($('#stPushNote', body));
