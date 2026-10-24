@@ -1,5 +1,5 @@
 // SF-FS service worker: works offline in the basement, shows alerts.
-const CACHE = 'sffs-v30';
+const CACHE = 'sffs-v31';
 const SHELL = ['./', 'index.html', 'app.js', 'insights.js', 'config.js', 'seed.js', 'manifest.webmanifest', 'icons/tulip-180.png', 'icons/tulip-192.png', 'icons/tulip-512.png', 'icons/tulip-32.png'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
@@ -11,12 +11,16 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (/firestore|googleapis\.com\/identitytoolkit|securetoken|openfoodfacts|openbeautyfacts|openproductsfacts|upcitemdb/.test(url.href)) return;
+  // live data (database, sign-in, product lookups) always goes to the network; their pictures can be cached
+  if (/firestore|googleapis\.com\/identitytoolkit|securetoken|world\.open(food|beauty|products)facts\.org|api\.upcitemdb/.test(url.href)) return;
   const sameOrigin = url.origin === location.origin;
   if (sameOrigin) {
     e.respondWith(fetch(req).then(r => { if (r.ok) { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); } return r; })
       .catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match('index.html'))));
-  } else if (/fonts\.(googleapis|gstatic)|unpkg\.com|(cdn|fastly)\.jsdelivr\.net|gstatic\.com\/firebasejs|images\.open/.test(url.href)) {
+  } else if (req.mode === 'cors' && req.destination === '' && !/jsdelivr\.net/.test(url.href)) {
+    return;   // the app copying a picture: go straight to the website (a saved no-cors copy can't be read)
+  } else if (req.destination === 'image' || /fonts\.(googleapis|gstatic)|unpkg\.com|(cdn|fastly)\.jsdelivr\.net|gstatic\.com\/firebasejs|images\.open/.test(url.href)) {
+    // pictures from any website: keep a copy on the phone after the first time
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return r; })));
   }
 });

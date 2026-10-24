@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.7.1';
+const VERSION = '1.8.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -147,7 +147,7 @@ function showImg(it) {
   const k = (it.kinds || {})[showCode(it)];
   return (k && k.img) || it.img || kindsOf(it).find(k => k.img)?.img || '';
 }
-const pic = (it, cls = 'thumb') => showImg(it) ? `<img class="${cls}" src="${esc(showImg(it))}" alt="" loading="lazy">` : `<div class="${cls} ph">${flowerPH}</div>`;
+const pic = (it, cls = 'thumb') => showImg(it) ? `<img class="${cls}" src="${esc(showImg(it))}" alt="" decoding="async">` : `<div class="${cls} ph">${flowerPH}</div>`;
 
 /* ───────────── Data store (local or Firebase) ───────────── */
 const DEFAULT_META = () => ({
@@ -165,9 +165,11 @@ const DB = {
     else SEED.items.forEach(i => this.items.set(i.id, clone(i)));
     this.persistLocal();
   },
-  // Quick-start copy for this device. Once synced, photos live in the shared
-  // database (and its offline cache), so this copy skips them to stay small.
+  // Quick-start copy for this device. The small copy (localStorage) skips photos once synced;
+  // the full copy, photos included, goes to IndexedDB so pictures show instantly at launch.
   persistLocal() {
+    clearTimeout(this._idbT);
+    this._idbT = setTimeout(() => idb.set('snapshot', { meta: this.meta, items: [...this.items.values()], t: Date.now() }).catch(() => {}), 400);
     const items = [...this.items.values()];
     const slim = this.mode !== 'cloud' ? items : items.map(i => {
       let o = i;
@@ -182,6 +184,7 @@ const DB = {
     catch { if (this.mode !== 'cloud') toast("This phone's storage is full — turn on Sync so photos can live in the cloud"); }
   },
   async saveItem(it) {
+    sweepSoon();
     it.updatedAt = Date.now(); it.updatedBy = this.user?.email || 'this device';
     this.items.set(it.id, it); this.persistLocal(); render();
     if (this.mode === 'cloud') {
@@ -216,6 +219,57 @@ const DB = {
   },
   path(sub) { return `households/${CFG.household || 'spencer'}` + (sub ? '/' + sub : ''); }
 };
+/* ───────────── On-device storage for the full copy (IndexedDB: much roomier than localStorage) ───────────── */
+const idb = (() => {
+  let p;
+  const open = () => p ||= new Promise((res, rej) => {
+    const r = indexedDB.open('sffs', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const run = (mode, fn) => open().then(db => new Promise((res, rej) => {
+    const tx = db.transaction('kv', mode), req = fn(tx.objectStore('kv'));
+    tx.oncomplete = () => res(req?.result); tx.onerror = () => rej(tx.error);
+  }));
+  return { get: k => run('readonly', s => s.get(k)), set: (k, v) => run('readwrite', s => s.put(v, k)) };
+})();
+
+/* ───────────── Picture copies ─────────────
+   Pictures from the product lookup or a pasted link live on other websites. Make a small copy
+   (≈ 360px JPEG) once and keep it with the item, so it loads instantly, syncs, and works offline.
+   Sites that don't allow copying keep their link (the phone still caches it). */
+async function toThumb(url, max = 360) {
+  const r = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+  if (!r.ok) throw new Error(r.status);
+  const bmp = await createImageBitmap(await r.blob());
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', .78);
+}
+let sweeping = false;
+async function sweepPictures() {
+  if (sweeping || !navigator.onLine) return; sweeping = true;
+  // sites that refused a copy are left alone for a week, then tried again
+  const failed = dev.get('thumbFail2', {}), WEEK = 7 * 864e5;
+  const isRemote = u => /^https?:\/\//.test(u || '') && !(failed[u] > Date.now() - WEEK);
+  try {
+    for (const it of [...DB.items.values()]) {
+      const urls = [it.img, ...Object.values(it.kinds || {}).map(k => k.img)].filter(isRemote);
+      if (!urls.length) continue;
+      const map = {};
+      for (const u of new Set(urls)) { try { map[u] = await toThumb(u); } catch { if (navigator.onLine) failed[u] = Date.now(); } }
+      if (!Object.keys(map).length) continue;
+      await DB.mutate(it.id, x => {
+        if (map[x.img]) x.img = map[x.img];
+        if (x.kinds) { x.kinds = { ...x.kinds }; for (const c in x.kinds) if (map[x.kinds[c].img]) x.kinds[c] = { ...x.kinds[c], img: map[x.kinds[c].img] }; }
+      });
+    }
+  } finally { dev.set('thumbFail2', Object.fromEntries(Object.entries(failed).slice(-500))); sweeping = false; }
+}
+let sweepT;
+const sweepSoon = (ms = 2500) => { clearTimeout(sweepT); sweepT = setTimeout(sweepPictures, ms); };
+
 /* ───────────── Activity log (feeds Insights & History) ─────────────
    Every put-away, take-out, toss and count change is saved with when and who.
    Synced: households/<h>/log.  This device only: localStorage 'sffs-log'. */
@@ -307,7 +361,7 @@ async function goCloud() {
     if (!snap.exists()) return;
     DB.meta = { ...DEFAULT_META(), ...snap.data() }; DB.persistLocal(); render();
     if (!snap.metadata.fromCache) {   // only once we've heard from the cloud
-      switchToCostco();
+      switchToCostco(); sweepSoon(4000);
       const em = DB.meta.emails || [];
       if (!em[1]) DB.saveMeta({ emails: [em[0] || 'shawn@spencerfam.com', 'kinzspencer@gmail.com'] });
     }
@@ -1255,9 +1309,18 @@ async function switchToCostco() {
   }
 }
 DB.loadLocal(); render(); initCloud();
+idb.get('snapshot').then(snap => {
+  if (!snap?.items || DB.mode === 'cloud') return;   // the cloud already answered: it's newer
+  let changed = false;
+  for (const full of snap.items) {
+    const cur = DB.items.get(full.id);
+    if (cur && (cur.updatedAt || 0) <= (full.updatedAt || 0)) { DB.items.set(full.id, full); changed = true; }
+  }
+  if (changed) render();
+}).catch(() => {});
 // shared with insights.js (menu, Insights, History)
 window.SFFS = { $, $$, esc, DB, CFG, dev, openSheet, closeSheet, toast, qtyOf, sortLots, expDate, daysLeft, fmtExp, SOON,
   orderedCats, catGroups, pic, openItem, STORES, openSettings, openShop, readLog, wide, servingsGuess, render, flowerPH };
-if (!CFG.firebase) switchToCostco();
+if (!CFG.firebase) { switchToCostco(); sweepSoon(4000); }
 // deep links from notifications: ?view=shop
 if (new URLSearchParams(location.search).get('view') === 'shop') setTimeout(openShop, dev.get('splash', true) ? 3400 : 200);
