@@ -135,6 +135,96 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .sheet .grabbar{position:sticky;top:-10px;z-index:3;margin:-10px -22px 2px;padding:12px 0 12px;background:var(--card);border-radius:28px 28px 0 0;cursor:grab}
 .sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--accent2);margin:0 auto}
 #syncState.needs{color:var(--warn);font-weight:700;cursor:pointer}
+
+/* ── Flower menu: petals bloom out of the menu button ── */
+#goMenu .mflower{transform-origin:16px 16px;transition:transform .25s cubic-bezier(.3,1.4,.5,1)}
+#goMenu.open .mflower{transform:rotate(36deg) scale(1.12)}
+#goMenu.open{color:var(--accent)}
+#goMenu.open svg{stroke:var(--accent)}
+.bloom{position:fixed;inset:0;z-index:30}
+.bloom-veil{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 55%,transparent);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);opacity:0;transition:opacity .16s}
+.bloom.on .bloom-veil{opacity:1}
+.petal{position:absolute;left:0;top:0;width:78px;height:92px;margin:-46px 0 0 -39px;
+  border-radius:50% 50% 50% 50% / 58% 58% 42% 42%;background:linear-gradient(to bottom,var(--card),var(--soft));
+  border:1.5px solid var(--accent2);box-shadow:0 10px 24px -14px var(--ink);
+  transform:translate(var(--cx),var(--cy)) rotate(var(--rot)) scale(.15);opacity:0;
+  transition:transform .26s cubic-bezier(.25,1.45,.45,1) calc(var(--i) * 28ms),opacity .14s calc(var(--i) * 28ms)}
+.bloom.on .petal{transform:translate(var(--x),var(--y)) rotate(var(--rot)) scale(1);opacity:1}
+.petal .pc{display:flex;flex-direction:column;align-items:center;gap:3px;transform:rotate(calc(-1 * var(--rot)));pointer-events:none}
+.petal svg{width:26px;height:26px;fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.petal b{font:700 11.5px Quicksand,sans-serif;color:var(--ink)}
+.petal:active{filter:brightness(.96)}
+@media (prefers-reduced-motion:reduce){.petal,.bloom-veil{transition-duration:.01s!important}}
+
+/* ── Big windows (Insights, History, Shelves) ── */
+.sheet.big{max-height:94dvh}
+@media (min-width:700px){.sheet.big{width:min(1000px,94vw);max-height:90dvh}}
+.seg{display:inline-flex;background:var(--soft);border-radius:999px;padding:3px;margin:6px 0 4px}
+.seg button{padding:6px 14px;border-radius:999px;font-weight:700;font-size:13px;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 4px -2px var(--ink)}
+.banner{font-size:13px;color:var(--ink);background:var(--soft);border-radius:14px;padding:10px 12px;margin:8px 0 4px;line-height:1.45}
+.chip-s{display:inline-block;font:700 9.5px Quicksand,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1.2px solid var(--accent2);border-radius:999px;padding:0 6px;vertical-align:2px;font-style:normal}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+@media (min-width:700px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{background:var(--soft);border-radius:16px;padding:10px 12px;min-width:0}
+.tile b{display:block;font:800 26px/1.1 Fraunces,serif;font-variant-numeric:tabular-nums}
+.tile b.warn{color:var(--warn)}
+.tile span{font-size:12px;color:var(--muted);font-weight:600}
+.ins-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+@media (min-width:860px){.ins-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ins-grid .wide2{grid-column:1/-1}}
+.card{border:1.5px solid var(--soft);border-radius:20px;padding:12px 14px 10px;min-width:0}
+.card h3{font:italic 600 18px Fraunces,serif;margin:0 0 2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h4,.mini h4{font:700 11px Quicksand,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}
+.card .note{margin:2px 0 8px}
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart .gl{stroke:var(--soft);stroke-width:1}
+.chart .ax{fill:var(--muted);font:600 10px Quicksand,sans-serif}
+.chart .vl{fill:var(--ink);font:700 10px Quicksand,sans-serif}
+.chart .ba{fill:var(--accent)}
+.chart .bw{fill:var(--warn)}
+.chart .bar.tap{cursor:pointer}
+.chart .bar.tap:hover .ba,.chart .bar.sel .ba{fill:var(--leaf)}
+.chart .bar.sel .bw{opacity:.75}
+.hb{display:flex;flex-direction:column;gap:6px}
+.hr{display:grid;grid-template-columns:minmax(0,9.5em) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}
+.hl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.ht{height:8px;background:var(--soft);border-radius:4px;overflow:hidden}
+.ht i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.ht i.w{background:var(--warn)}
+.hv{font-weight:700;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tb{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+.tb th{font:700 10.5px Quicksand,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 0}
+.tb td{padding:6px 0;border-top:1px dashed var(--soft)}
+.tb td:first-child{font-weight:600;padding-right:8px}
+.tb .r{text-align:right;white-space:nowrap;padding-left:8px}
+.tb .warn,.warn{color:var(--warn)}
+.tb .link{font-size:13px}
+.tb .link:disabled{color:var(--muted);opacity:.6}
+.gauge{margin:10px 0 4px}
+.gl2{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;font-weight:600}
+.gl2 b{font:800 16px Fraunces,serif}
+.track{position:relative;height:10px;background:var(--soft);border-radius:5px;margin:6px 0 2px}
+.track i{display:block;height:100%;background:var(--leaf);border-radius:5px}
+.mini .sugg{margin:0}
+/* history */
+.hday h4{font:italic 600 16px Fraunces,serif;margin:16px 0 4px;color:var(--ink)}
+.hev{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--soft);font-size:14px}
+.hev .dot2{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.hev.in .dot2{background:var(--leaf)} .hev.toss .dot2{background:var(--warn)} .hev.adjust .dot2{background:var(--muted)}
+.hev small{color:var(--muted)} .hev small.ok{color:var(--leaf);font-weight:700}
+.hev time{font-size:12px;color:var(--muted);white-space:nowrap}
+/* shelves */
+.shelfmap{display:flex;gap:10px;align-items:flex-end;overflow-x:auto;padding:8px 0 4px}
+.sm-col{display:flex;flex-direction:column;align-items:center;gap:6px}
+.sm-rows{display:flex;flex-direction:column;gap:5px}
+.sm-cell{width:92px;min-height:46px;border-radius:12px 12px 4px 4px;border-bottom:3px solid var(--muted);padding:5px 6px;text-align:left;
+  background:color-mix(in srgb,var(--accent) calc(var(--fill) * 55%),var(--soft))}
+.sm-cell b{display:block;font:800 13px Fraunces,serif}
+.sm-cell small{font-size:10.5px;color:var(--ink);font-weight:600}
+.sm-cell.empty{background:var(--soft);opacity:.7}
+.sm-cell.sel{outline:2.5px solid var(--leaf);outline-offset:1px}
+.sm-col.floor .sm-cell{width:120px}
+.sm-lbl{font:italic 600 16px Fraunces,serif}
 /* Use: full A–Z list with a letter bar on the right */
 .upsearch{position:sticky;top:19px;z-index:2;background:var(--card);padding:4px 0 6px;margin-bottom:4px}
 .upwrap{display:grid;grid-template-columns:minmax(0,1fr) 26px;gap:4px;align-items:start}
@@ -363,8 +453,8 @@ html.splashing,html.splashing body{background:var(--splash)}
   <button class="ic" id="goUse" aria-label="Use something">
     <svg viewBox="0 0 32 32"><path d="M7 13h18v4a9 9 0 0 1-18 0Z"/><path d="M5 13h22"/><path d="M12 8c0-2 2-2 2-4M17 8c0-2 2-2 2-4"/></svg>use
   </button>
-  <button class="ic" id="goSettings" aria-label="Settings">
-    <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="3.2"/><path d="M16 12.8c-2-3-2-6.5 0-8.3 2 1.8 2 5.3 0 8.3ZM16 19.2c2 3 2 6.5 0 8.3-2-1.8-2-5.3 0-8.3ZM12.8 16c-3 2-6.5 2-8.3 0 1.8-2 5.3-2 8.3 0ZM19.2 16c3-2 6.5-2 8.3 0-1.8 2-5.3 2-8.3 0Z"/></svg>settings
+  <button class="ic" id="goMenu" aria-label="Menu">
+    <svg viewBox="0 0 32 32"><g class="mflower"><ellipse cx="16" cy="8.6" rx="3.4" ry="5"/><ellipse cx="16" cy="8.6" rx="3.4" ry="5" transform="rotate(72 16 16)"/><ellipse cx="16" cy="8.6" rx="3.4" ry="5" transform="rotate(144 16 16)"/><ellipse cx="16" cy="8.6" rx="3.4" ry="5" transform="rotate(216 16 16)"/><ellipse cx="16" cy="8.6" rx="3.4" ry="5" transform="rotate(288 16 16)"/><circle cx="16" cy="16" r="2.6"/></g></svg>menu
   </button>
 </nav>
 
@@ -376,5 +466,6 @@ html.splashing,html.splashing body{background:var(--splash)}
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 <script type="module" src="app.js"></script>
+<script type="module" src="insights.js"></script>
 </body>
 </html>

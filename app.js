@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.4.2';
+const VERSION = '1.5.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -129,6 +129,8 @@ const normCode = c => { c = String(c).trim(); return /^\d{12}$/.test(c) ? '0' + 
 const flowerPH = `<svg viewBox="0 0 24 24" fill="currentColor"><g opacity=".9">${[0, 72, 144, 216, 288].map(a => `<ellipse cx="12" cy="6.5" rx="3.2" ry="4.6" transform="rotate(${a} 12 12)"/>`).join('')}</g><circle cx="12" cy="12" r="2.6" fill="#f6d36b"/></svg>`;
 // Which picture to show: the package of the batch that expires first (its kind's photo),
 // otherwise the item's main photo.
+// "ReadyWise 124 serv" → 124
+const servingsGuess = it => { const m = /(\d+)\s*serv/i.exec(it.name || ''); return m ? +m[1] : null; };
 const kindName = (it, code) => code ? ((it.kinds || {})[code]?.name || '') : '';
 // Which kind a batch is. A batch nobody tagged counts as the item's only kind, when it has just one.
 function effCode(it, lot) {
@@ -152,7 +154,7 @@ const DEFAULT_META = () => ({
   cats: SEED.cats,
   shelves: 'ABCDEF'.split('').map(id => ({ id, rows: 5 })),
   emails: ['shawn@spencerfam.com', ''],
-  reportDay: 6, reportHour: 8, reportRequested: false
+  reportDay: 6, reportHour: 8, reportRequested: false, familySize: 4
 });
 const DB = {
   mode: 'local', user: null, items: new Map(), meta: DEFAULT_META(), fb: null, ready: false,
@@ -214,6 +216,29 @@ const DB = {
   },
   path(sub) { return `households/${CFG.household || 'spencer'}` + (sub ? '/' + sub : ''); }
 };
+/* ───────────── Activity log (feeds Insights & History) ─────────────
+   Every put-away, take-out, toss and count change is saved with when and who.
+   Synced: households/<h>/log.  This device only: localStorage 'sffs-log'. */
+const whoAmI = () => DB.user?.email || 'this device';
+function logEvent(e) {
+  const ev = { t: Date.now(), who: whoAmI(), ...e };
+  dispatchEvent(new Event('sffs:logged'));
+  if (DB.mode === 'cloud') {
+    const { collection, addDoc } = DB.fb;
+    addDoc(collection(DB.fb.db, DB.path('log')), ev).catch(err => console.warn('log', err));
+  } else {
+    try { const a = JSON.parse(localStorage.getItem('sffs-log') || '[]'); a.push(ev); localStorage.setItem('sffs-log', JSON.stringify(a.slice(-3000))); } catch {}
+  }
+}
+async function readLog(days = 400) {
+  const since = Date.now() - days * 864e5;
+  if (DB.mode === 'cloud') {
+    const { collection, query, where, getDocs, limit } = DB.fb;
+    const snap = await getDocs(query(collection(DB.fb.db, DB.path('log')), where('t', '>=', since), limit(8000)));
+    return snap.docs.map(d => d.data()).sort((a, b) => a.t - b.t);
+  }
+  try { return JSON.parse(localStorage.getItem('sffs-log') || '[]').filter(e => e.t >= since); } catch { return []; }
+}
 function syncErr(e) { console.error(e); toast('Saved here — will sync when back online'); }
 
 const FB = 'https://www.gstatic.com/firebasejs/10.12.2/';
@@ -401,9 +426,12 @@ addEventListener('resize', () => { if (Math.abs(innerWidth - lastW) > 40) { last
 
 /* ───────────── Sheets ───────────── */
 let onSheetClose = null;
-function openSheet(html, onClose) {
+function openSheet(html, onClose, size) {
   closeScanner();
-  $('#sheetBody').innerHTML = html; onSheetClose = onClose || null;
+  $('#sheet').classList.toggle('big', size === 'big');
+  // a brand-new container each time, so tap handlers from the last window can't linger
+  const old = $('#sheetBody'), fresh = old.cloneNode(false); old.replaceWith(fresh);
+  fresh.innerHTML = html; onSheetClose = onClose || null;
   const v = $('#veil'); v.classList.remove('hidden'); requestAnimationFrame(() => { v.classList.add('show'); $('#sheet').classList.add('show'); });
   $('#sheet').scrollTop = 0;
   return $('#sheetBody');
@@ -437,6 +465,7 @@ function wireShelves(root, get, set) {
 /* ───────────── Item sheet (view / edit / add by hand) ───────────── */
 function openItem(id, preset = {}) {
   const isNew = !id;
+  const qtyBefore = isNew ? 0 : qtyOf(DB.items.get(id) || {});
   const d = isNew ? { id: uid(), name: '', cat: activeCat || DB.meta.cats[0].id, lots: [], par: 1, loc: '', img: '', codes: [], store: 'costco', notes: '', order: 999, ...preset }
                   : clone(DB.items.get(id));
   if (!d) return;
@@ -471,6 +500,7 @@ function openItem(id, preset = {}) {
       <button class="link flourish" id="fScanKind">scan another kind</button><button class="link mute" id="fTypeKind">type a barcode</button></div>
     <div class="cols hidden" id="fTypeRow" style="align-items:end"><label class="field"><span>Barcode number</span><input id="fTyped" inputmode="numeric"></label>
       <button class="link" id="fTypedGo" style="margin-bottom:18px">add</button></div>
+    <label class="field ${d.cat === 'longterm' ? '' : 'hidden'}" id="fServRow"><span>Servings per package</span><input id="fServ" type="number" inputmode="numeric" min="0" value="${esc(d.servings ?? servingsGuess(d) ?? '')}" placeholder="e.g. 124"></label>
     <label class="field"><span>Notes</span><input id="fNotes" value="${esc(d.notes || '')}"></label>
     <div class="acts">
       ${isNew ? '<span></span>' : '<button class="link warn" id="fDel">remove item</button>'}
@@ -510,6 +540,7 @@ function openItem(id, preset = {}) {
     const j = e.target.dataset.lkind; if (j != null) { if (e.target.value) d.lots[j].code = e.target.value; else delete d.lots[j].code; drawLots(); }
   });
   wireShelves($('#fShelves', body), () => d.loc, v => { d.loc = v; drawLots(); });
+  $('#fCat', body).addEventListener('change', e => $('#fServRow', body).classList.toggle('hidden', e.target.value !== 'longterm'));
   $('#fAddLot', body).onclick = () => { d.lots.push({ id: uid('l'), exp: '', qty: 1 }); drawLots(); };
   $('#fPar', body).oninput = e => { d.par = Math.max(0, +e.target.value || 0); drawLots(); };
   // The big picture is the same one the list shows. Changing it changes that kind's photo
@@ -532,6 +563,7 @@ function openItem(id, preset = {}) {
     d.name = $('#fName', body).value.trim(); if (!d.name) { $('#fName', body).focus(); toast('Give it a name first'); return false; }
     d.cat = $('#fCat', body).value; d.store = $('#fStore', body).value; d.brand = $('#fBrand', body).value.trim();
     d.notes = $('#fNotes', body).value.trim();
+    const sv = $('#fServ', body).value; if (sv !== '') d.servings = Math.max(0, +sv); else delete d.servings;
     $$('[data-kname]', body).forEach(inp => { const c = inp.dataset.kname; d.kinds = { ...(d.kinds || {}) }; d.kinds[c] = { ...(d.kinds[c] || {}), name: inp.value.trim() }; });
     d.lots = mergeLots(d.lots);
     return true;
@@ -563,7 +595,10 @@ function openItem(id, preset = {}) {
   $('#fTypedGo', body).onclick = () => { const v = $('#fTyped', body).value.replace(/\s/g, ''); if (v) attach(normCode(v)); };
   $('#fSave', body).onclick = async () => {
     if (!collect()) return;
-    await DB.saveItem(d); closeSheet(); toast(isNew ? 'Added ✿' : 'Saved ✿');
+    await DB.saveItem(d);
+    const delta = qtyOf(d) - qtyBefore;
+    if (delta) logEvent({ type: 'adjust', id: d.id, name: d.name, cat: d.cat, qty: delta });
+    closeSheet(); toast(isNew ? 'Added ✿' : 'Saved ✿');
   };
   if (isNew && !d.name) setTimeout(() => $('#fName', body)?.focus(), 350);
 }
@@ -636,6 +671,7 @@ function openPutAway(id, qtyDefault = 1, code = '') {
     const exp = $('#paExp', body).value;
     const kc = code || $('#paKind', body)?.value || (ks.length === 1 ? ks[0].code : '');
     await DB.mutate(id, x => { x.lots = mergeLots([...(x.lots || []), { exp, qty, ...(kc ? { code: kc } : {}) }]); if (loc) x.loc = loc; });
+    logEvent({ type: 'in', id, name: it.name, cat: it.cat, qty, exp: exp || '', code: kc || '' });
     closeSheet(); toast(`Tucked away ✿ ${loc ? 'on ' + loc : ''}`);
   };
 }
@@ -649,14 +685,19 @@ function openTakeOut(id, code = '') {
     <div class="choice">
       <button class="link big flourish" id="toYes">Yes, that one</button>
       ${lots.length > 1 ? `<button class="link big" id="toOther">I took a different one</button>` : ''}
+      <button class="link" id="toToss" style="color:var(--warn)">Tossed it<small>it was expired or spoiled</small></button>
       <button class="link mute" id="toCancel">never mind</button>
     </div><div id="toLots"></div>`);
-  const take = async lotId => {
+  const take = async (lotId, type = 'out') => {
+    const lot = it.lots.find(l => l.id === lotId) || o;
     const out = await DB.mutate(id, x => { const l = x.lots.find(l => l.id === lotId) || sortLots(x.lots)[0]; if (l) l.qty--; x.lots = x.lots.filter(l => l.qty > 0); });
+    logEvent({ type, id, name: it.name, cat: it.cat, qty: 1, exp: lot.exp || '', code: effCode(it, lot), oldest: lotId === o.id });
     closeSheet();
     const left = qtyOf(out);
+    if (type === 'toss') return toast(`Tossed. ${left < (out.par ?? 1) ? out.name + ' is on the shopping list' : left + ' left'}`);
     toast(left < (out.par ?? 1) ? `Enjoy! ${out.name} is on the shopping list` : `Enjoy! ${left} left`);
   };
+  $('#toToss', body).onclick = () => take(o.id, 'toss');
   $('#toYes', body).onclick = () => take(o.id);
   $('#toCancel', body).onclick = closeSheet;
   if (lots.length > 1) $('#toOther', body).onclick = () => {
@@ -956,6 +997,9 @@ function openSettings() {
       <label class="field"><span>Around</span><select id="stHour">${[6, 7, 8, 9, 10, 12, 15, 18, 20].map(h => `<option value="${h}" ${h === +m.reportHour ? 'selected' : ''}>${h % 12 || 12}${h < 12 ? ' am' : ' pm'}</option>`).join('')}</select></label>
     </div>
 
+    <label class="field"><span>People in our family</span><input id="stFam" type="number" inputmode="numeric" min="1" max="20" value="${esc(m.familySize ?? 4)}"></label>
+    <p class="note" style="margin-top:-6px">Used by Insights to work out how long our storage would last.</p>
+
     <div class="setsec">Shelves</div>
     <p class="note">Letter = shelf, number = row from the bottom.</p>
     <div id="stShelves"></div>
@@ -988,6 +1032,7 @@ function openSettings() {
   const saveEmails = () => DB.saveMeta({ emails: [$('#stE1', body).value.trim(), $('#stE2', body).value.trim()] });
   $('#stE1', body).onchange = saveEmails; $('#stE2', body).onchange = saveEmails;
   $('#stDay', body).onchange = e => DB.saveMeta({ reportDay: +e.target.value });
+  $('#stFam', body).onchange = e => DB.saveMeta({ familySize: Math.max(1, +e.target.value || 4) });
   $('#stHour', body).onchange = e => DB.saveMeta({ reportHour: +e.target.value });
   $('#stCatGo', body).onclick = async () => { const n = $('#stCat', body).value.trim(); if (!n) return;
     const id = n.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (DB.meta.cats.some(c => c.id === id)) return toast('Already have that one');
@@ -1046,7 +1091,7 @@ $('#goScan').onclick = () => { $('#goScan').classList.add('pulse'); setTimeout((
 $('#goAdd').onclick = () => openItem(null);
 $('#goUse').onclick = openUsePicker;
 $('#goShop').onclick = openShop;
-$('#goSettings').onclick = openSettings;
+
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 // One-time (Oct 2026): Costco became the main store. Every item that said Macey's switches to Costco, once per household.
 let switching = false;
@@ -1069,6 +1114,9 @@ async function switchToCostco() {
   }
 }
 DB.loadLocal(); render(); initCloud();
+// shared with insights.js (menu, Insights, History)
+window.SFFS = { $, $$, esc, DB, CFG, dev, openSheet, closeSheet, toast, qtyOf, sortLots, expDate, daysLeft, fmtExp, SOON,
+  orderedCats, catGroups, pic, openItem, openSettings, openShop, readLog, wide, servingsGuess, render, flowerPH };
 if (!CFG.firebase) switchToCostco();
 // deep links from notifications: ?view=shop
 if (new URLSearchParams(location.search).get('view') === 'shop') setTimeout(openShop, dev.get('splash', true) ? 3400 : 200);
