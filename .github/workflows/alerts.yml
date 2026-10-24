@@ -1,10 +1,8 @@
 name: Food Storage alerts & weekly list
 
 on:
-  # PAUSED until setup is finished (SETUP.md step 4). To turn alerts back on,
-  # remove the # from the two lines below.
-  # schedule:
-  #   - cron: '7 * * * *'     # every hour (GitHub may run a few minutes late)
+  schedule:
+    - cron: '7 * * * *'     # every hour (GitHub may run a few minutes late)
   workflow_dispatch:
     inputs:
       force_report:

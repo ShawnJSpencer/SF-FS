@@ -11,6 +11,12 @@ const APP_URL = process.env.APP_URL || 'https://shawnjspencer.github.io/SF-FS/';
 const TZ = 'America/Denver';
 const FORCE = process.env.FORCE_REPORT === 'true';
 
+// Not set up yet? Finish quietly instead of failing (a failed run makes GitHub email you every hour).
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  console.log('Skipping: add the FIREBASE_SERVICE_ACCOUNT secret (SETUP.md step 4) to turn on emails and alerts.');
+  process.exit(0);
+}
+if (!process.env.SMTP_PASS) console.log('Note: SMTP_USER / SMTP_PASS secrets are missing, so emails will be skipped (phone alerts still work).');
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
 const db = admin.firestore();
 const hRef = db.doc(`households/${H}`);
