@@ -280,7 +280,12 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 
 /* scanner */
 #reader{width:100%;border-radius:20px;overflow:hidden;background:#000;min-height:220px}
-#reader video{border-radius:20px}
+#reader{position:relative}
+#reader video{border-radius:20px;width:100%;display:block;aspect-ratio:4/3;object-fit:cover}
+/* the band the reader looks at most: across the middle */
+.scanframe{position:absolute;left:7%;right:7%;top:25%;bottom:25%;border:2.5px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.28);pointer-events:none;transition:border-color .15s}
+.scanframe::after{content:"";position:absolute;left:4%;right:4%;top:50%;height:2px;background:var(--warn);opacity:.7;box-shadow:0 0 8px var(--warn)}
+.scanframe.hit{border-color:#7fe08a}
 .lens{display:flex;justify-content:center;align-items:baseline;gap:10px;margin:10px 0 0;color:var(--muted);font-size:14px}
 .lens button{font-weight:700;color:var(--muted)}
 .lens button.on{color:var(--accent)}
@@ -467,6 +472,7 @@ html.splashing,html.splashing body{background:var(--splash)}
 <input type="file" id="filePick" accept="image/*" class="hidden">
 <input type="file" id="jsonPick" accept="application/json,.json" class="hidden">
 
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js" defer></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 <script type="module" src="app.js"></script>
 <script type="module" src="insights.js"></script>

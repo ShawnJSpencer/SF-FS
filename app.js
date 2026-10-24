@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.5.2';
+const VERSION = '1.6.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -766,11 +766,94 @@ const pickCam = (cams, mode) => {
   return back.find(c => /^back camera$/i.test(c.label)) || back.find(c => /triple|dual/i.test(c.label)) || back[0] || null;
 };
 let scanRun = 0, camList = null;
+
+// Camera names (labels) only appear after permission, so ask once, then list the cameras.
+async function listCameras() {
+  let devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  if (!devs.some(d => d.label)) {
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    tmp.getTracks().forEach(t => t.stop());
+    devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  }
+  return devs.map(d => ({ id: d.deviceId, label: d.label }));
+}
+
+/* ── Stronger reader: ZXing compiled to WebAssembly (much better with curved cans, blur, small codes).
+      Loaded from jsDelivr, cached for offline. If it can't load, the old reader takes over. */
+const ZX_VER = '2.2.4';
+let zxState = null;   // null = untested, true = ready, false = unavailable
+const ZX_OPTS = { tryHarder: true, tryRotate: true, tryInvert: true, tryDownscale: true, maxNumberOfSymbols: 1,
+  formats: ['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E', 'Code128', 'Code39', 'QRCode'] };
+async function zxReady() {
+  if (zxState !== null) return zxState;
+  const Z = window.ZXingWASM;
+  if (!Z?.readBarcodes) return (zxState = false);
+  try {
+    Z.prepareZXingModule?.({ overrides: { locateFile: (path, prefix) => path.endsWith('.wasm')
+      ? `https://cdn.jsdelivr.net/npm/zxing-wasm@${ZX_VER}/dist/reader/${path}` : prefix + path } });
+    const probe = new ImageData(8, 8);
+    const read = opts => Promise.race([Z.readBarcodes(probe, opts), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 9000))]);
+    try { await read(ZX_OPTS); }
+    catch (e) { if (/format/i.test(String(e))) { delete ZX_OPTS.formats; await read(ZX_OPTS); } else throw e; }  // older/newer format names: read everything
+    return (zxState = true);
+  } catch (e) { console.warn('ZXing WASM unavailable, using the old reader', e); return (zxState = false); }
+}
+
+// Our own camera loop for the stronger reader: full-HD picture, read a band across the middle
+// (the flattest part of a can) most of the time, and the whole picture every few tries.
+function startZX(el, cam, onText) {
+  let stream = null, stopped = false, busy = false, n = 0, timer = 0;
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', ''); video.muted = true; video.autoplay = true;
+  el.innerHTML = ''; el.append(video);
+  const frame = document.createElement('div'); frame.className = 'scanframe'; el.append(frame);
+  const cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
+  const tick = async () => {
+    if (stopped) return;
+    if (!busy && video.readyState >= 2 && video.videoWidth) {
+      busy = true;
+      try {
+        const vw = video.videoWidth, vh = video.videoHeight, full = (++n % 4) === 0;
+        const sh = full ? vh : Math.round(vh * .5), sy = full ? 0 : Math.round((vh - sh) / 2);
+        const k = Math.min(1, 1600 / vw);
+        cv.width = Math.round(vw * k); cv.height = Math.round(sh * k);
+        ctx.drawImage(video, 0, sy, vw, sh, 0, 0, cv.width, cv.height);
+        const res = await window.ZXingWASM.readBarcodes(ctx.getImageData(0, 0, cv.width, cv.height), ZX_OPTS);
+        const hit = res.find(r => r.text && r.isValid !== false);
+        if (hit && !stopped) { frame.classList.add('hit'); onText(hit.text); }
+      } catch (e) { console.warn(e); }
+      busy = false;
+    }
+    timer = setTimeout(tick, 90);
+  };
+  const ready = navigator.mediaDevices.getUserMedia({ audio: false, video: {
+      ...(cam ? { deviceId: { exact: cam.id } } : { facingMode: 'environment' }),
+      width: { ideal: 1920 }, height: { ideal: 1080 } } })     // sharper picture than the 640×480 default
+    .then(s => { stream = s; if (stopped) return s.getTracks().forEach(t => t.stop()); video.srcObject = s; return video.play(); })
+    .then(() => tick());
+  return {
+    ready,
+    async stop() { stopped = true; clearTimeout(timer); stream?.getTracks().forEach(t => t.stop()); },
+    clear() { el.innerHTML = ''; }
+  };
+}
+
+function startHtml5(cam, onText) {   // the old reader, kept as a backup
+  const F = window.Html5QrcodeSupportedFormats;
+  const s = new Html5Qrcode('reader', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE], verbose: false,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+  s.ready = s.start(cam ? cam.id : { facingMode: 'environment' },
+    { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * .86), height: Math.floor(Math.min(h, w) * .45) }), aspectRatio: 1.333,
+      videoConstraints: { ...(cam ? { deviceId: { exact: cam.id } } : { facingMode: 'environment' }), width: { ideal: 1920 }, height: { ideal: 1080 } } },
+    onText, () => {});
+  return s;
+}
+
 function openScanner(opts = {}) {
   scanBusy = false;
   const target = opts.attach && DB.items.get(opts.attach);
   const body = openSheet(`<div class="sheetbar">${target ? `<button class="link" id="scBack">‹ back to ${esc(target.name)}</button><span></span>` : `<span></span><button class="link mute" id="scClose">close</button>`}</div>
-    <h2>${target ? 'Scan the other kind' : 'Scan a barcode'}</h2><p class="sub">${target ? `It'll count as <b>${esc(target.name)}</b>.` : 'Hold the code inside the frame.'}</p>
+    <h2>${target ? 'Scan the other kind' : 'Scan a barcode'}</h2><p class="sub">${target ? `It'll count as <b>${esc(target.name)}</b>.` : 'Line the barcode up across the middle.'}</p>
     <div id="reader"></div>
     <div class="lens hidden" id="lens"><button data-lens="close">Close-up <small>0.5×</small></button><span>·</span><button data-lens="normal">Normal <small>1×</small></button></div>
     <div class="cols" style="align-items:end"><label class="field"><span>Or type the number</span><input id="typed" inputmode="numeric" placeholder="0 12345 67890 5"></label>
@@ -781,13 +864,13 @@ function openScanner(opts = {}) {
   else $('#scClose', body).onclick = closeSheet;
   $('#typedGo', body).onclick = () => { const v = $('#typed', body).value.replace(/\s/g, ''); if (v) onCode(v, opts); };
   const showLens = mode => { $$('#lens [data-lens]', body).forEach(b => b.classList.toggle('on', b.dataset.lens === mode)); };
+  const onText = text => { if (scanBusy) return; scanBusy = true; navigator.vibrate?.(30); onCode(text, opts); };
+  const noCam = () => { if ($('#reader', body)) $('#reader', body).innerHTML = `<p class="note" style="color:#fff;padding:20px">Camera isn't available here. Allow camera access, or type the number below.</p>`; };
   const start = async () => {
-    if (!window.Html5Qrcode) return setTimeout(start, 200);
     const run = ++scanRun;
-    const F = window.Html5QrcodeSupportedFormats;
     let mode = dev.get('lens', null), cam = null;
     try {
-      if (!camList) camList = await Html5Qrcode.getCameras();    // names are only visible after camera permission
+      if (!camList) camList = await listCameras();
       if (run !== scanRun || !$('#reader', body)) return;          // window closed meanwhile
       const hasClose = !!pickCam(camList, 'close');
       $('#lens', body).classList.toggle('hidden', !hasClose);
@@ -796,12 +879,17 @@ function openScanner(opts = {}) {
       if (!hasClose) mode = 'normal';
       cam = pickCam(camList, mode);
       showLens(mode);
-    } catch { /* fall back to whatever back camera Safari picks */ }
-    scanner = new Html5Qrcode('reader', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE], verbose: false,
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
-    scanner.start(cam ? cam.id : { facingMode: 'environment' }, { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * .86), height: Math.floor(Math.min(h, w) * .45) }), aspectRatio: 1.333 },
-      text => { if (scanBusy) return; scanBusy = true; navigator.vibrate?.(30); onCode(text, opts); }, () => {})
-      .catch(() => { if ($('#reader', body)) $('#reader', body).innerHTML = `<p class="note" style="color:#fff;padding:20px">Camera isn't available here. Allow camera access, or type the number below.</p>`; });
+    } catch (e) { console.warn(e); }
+    const useZX = await zxReady();
+    if (run !== scanRun || !$('#reader', body)) return;
+    if (useZX) {
+      scanner = startZX($('#reader', body), cam, onText);
+      scanner.ready.catch(async e => { console.warn(e); if (run === scanRun) { await closeScanner(); noCam(); } });
+    } else {
+      if (!window.Html5Qrcode) return setTimeout(start, 200);
+      scanner = startHtml5(cam, onText);
+      scanner.ready.catch(noCam);
+    }
   };
   $('#lens', body).onclick = async e => {
     const b = e.target.closest('[data-lens]'); if (!b || b.classList.contains('on')) return;

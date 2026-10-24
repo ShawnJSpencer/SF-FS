@@ -1,5 +1,5 @@
 // SF-FS service worker: works offline in the basement, shows alerts.
-const CACHE = 'sffs-v26';
+const CACHE = 'sffs-v27';
 const SHELL = ['./', 'index.html', 'app.js', 'insights.js', 'config.js', 'seed.js', 'manifest.webmanifest', 'icons/tulip-180.png', 'icons/tulip-192.png', 'icons/tulip-512.png', 'icons/tulip-32.png'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
@@ -16,7 +16,7 @@ self.addEventListener('fetch', e => {
   if (sameOrigin) {
     e.respondWith(fetch(req).then(r => { if (r.ok) { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); } return r; })
       .catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match('index.html'))));
-  } else if (/fonts\.(googleapis|gstatic)|unpkg\.com|gstatic\.com\/firebasejs|images\.open/.test(url.href)) {
+  } else if (/fonts\.(googleapis|gstatic)|unpkg\.com|(cdn|fastly)\.jsdelivr\.net|gstatic\.com\/firebasejs|images\.open/.test(url.href)) {
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return r; })));
   }
 });
