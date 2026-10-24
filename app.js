@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.6.1';
+const VERSION = '1.7.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -524,7 +524,8 @@ function openItem(id, preset = {}) {
         ${/^\d{4}$/.test(l.exp) ? `<b>${l.exp}</b> <button class="link mute" data-yr="${i}" style="font-size:12px">change</button>` : ''}
         <small>${l.exp ? (fmtLeft(l.exp) || 'expires ' + fmtExp(l.exp)) : 'no date — tap to set'}</small>
         ${kindsOf(d).length ? `<select data-lkind="${i}" style="border:0;background:none;color:var(--accent);font-size:13px;font-weight:700;padding:0;max-width:190px;-webkit-appearance:none;appearance:none">
-          <option value="">which kind? ▾</option>${kindsOf(d).map((k, j) => `<option value="${esc(k.code)}" ${k.code === l.code ? 'selected' : ''}>${esc(k.name || 'Kind ' + (j + 1))} ▾</option>`).join('')}</select>` : ''}</span>
+          <option value="">which kind? ▾</option>${kindsOf(d).map((k, j) => `<option value="${esc(k.code)}" ${k.code === l.code ? 'selected' : ''}>${esc(k.name || 'Kind ' + (j + 1))} ▾</option>`).join('')}</select>` : ''}
+        <select data-lstore="${i}" class="lotsel" style="color:${l.store ? 'var(--leaf)' : 'var(--muted)'}"><option value="">which store? ▾</option>${Object.entries(STORES).map(([k, st]) => `<option value="${k}" ${k === l.store ? 'selected' : ''}>from ${esc(st.name)} ▾</option>`).join('')}</select></span>
         <span class="step"><button data-m="${i}">−</button><b>${l.qty}</b><button data-p="${i}">+</button></span></div>`; }).join('')
       : `<p class="note">None on the shelf right now.</p>`;
     const q = lots.reduce((a, l) => a + (+l.qty || 0), 0);
@@ -548,6 +549,7 @@ function openItem(id, preset = {}) {
       when.querySelector('small').textContent = l.exp ? (fmtLeft(l.exp) || 'expires ' + fmtExp(l.exp)) : 'no date — tap to set';
     }
     const j = e.target.dataset.lkind; if (j != null) { if (e.target.value) d.lots[j].code = e.target.value; else delete d.lots[j].code; drawLots(); }
+    const q = e.target.dataset.lstore; if (q != null) { if (e.target.value) d.lots[q].store = e.target.value; else delete d.lots[q].store; drawLots(); }
   });
   wireShelves($('#fShelves', body), () => d.loc, v => { d.loc = v; drawLots(); });
   $('#fCat', body).addEventListener('change', e => $('#fServRow', body).classList.toggle('hidden', e.target.value !== 'longterm'));
@@ -615,9 +617,9 @@ function openItem(id, preset = {}) {
 function mergeLots(lots) {
   const m = new Map();
   for (const l of lots) {
-    if (!(l.qty > 0)) continue; const k = (l.exp || '') + '|' + (l.code || '');
+    if (!(l.qty > 0)) continue; const k = (l.exp || '') + '|' + (l.code || '') + '|' + (l.store || '');
     if (m.has(k)) m.get(k).qty += l.qty;
-    else m.set(k, { id: l.id || uid('l'), exp: l.exp || '', qty: l.qty, ...(l.code ? { code: l.code } : {}) });
+    else m.set(k, { id: l.id || uid('l'), exp: l.exp || '', qty: l.qty, ...(l.code ? { code: l.code } : {}), ...(l.store ? { store: l.store } : {}) });
   }
   return [...m.values()];
 }
@@ -688,8 +690,14 @@ function openPutAway(id, qtyDefault = 1, code = '') {
       <div class="field"><span>How many</span><div class="step" style="padding-top:6px"><button id="paM">−</button><b id="paQ">${qty}</b><button id="paP">+</button></div></div>
     </div>
     <p class="note" id="paHint"></p>
+    <div class="field"><span>Bought at</span><div class="storepick" id="paStore">${Object.entries(STORES).map(([k, st]) => `<button type="button" data-st="${k}">${esc(st.name)}</button>`).join('')}</div></div>
     ${it.loc ? '' : `<div class="sec-title" style="color:var(--ink)">Which shelf?</div><div id="paShelves">${shelvesHTML('')}</div>`}
     <div class="acts"><button class="link mute" id="paCancel">cancel</button><button class="link big flourish" id="paGo">Tuck it away</button></div>`);
+  const lastStore = [...(it.lots || [])].reverse().find(l => l.store)?.store;
+  let store = (code && (it.kinds || {})[code]?.store) || lastStore || it.store || 'costco';
+  const markStore = () => $$('#paStore [data-st]', body).forEach(b => b.classList.toggle('on', b.dataset.st === store));
+  markStore();
+  $('#paStore', body).onclick = e => { const b = e.target.closest('[data-st]'); if (b) { store = b.dataset.st; markStore(); } };
   const last = sortLots(it.lots).filter(l => l.exp).pop();
   if (last) { $('#paHint', body).textContent = `Last batch was ${fmtExp(last.exp)}.`; if (/^\d{4}-\d{2}$/.test(last.exp)) $('#paExp', body).value = last.exp; }
   $('#paM', body).onclick = () => { qty = Math.max(1, qty - 1); $('#paQ', body).textContent = qty; };
@@ -699,8 +707,11 @@ function openPutAway(id, qtyDefault = 1, code = '') {
   $('#paGo', body).onclick = async () => {
     const exp = $('#paExp', body).value;
     const kc = code || $('#paKind', body)?.value || (ks.length === 1 ? ks[0].code : '');
-    await DB.mutate(id, x => { x.lots = mergeLots([...(x.lots || []), { exp, qty, ...(kc ? { code: kc } : {}) }]); if (loc) x.loc = loc; });
-    logEvent({ type: 'in', id, name: it.name, cat: it.cat, qty, exp: exp || '', code: kc || '' });
+    await DB.mutate(id, x => {
+      x.lots = mergeLots([...(x.lots || []), { exp, qty, store, ...(kc ? { code: kc } : {}) }]); if (loc) x.loc = loc;
+      if (kc && x.kinds?.[kc]) { x.kinds = { ...x.kinds }; x.kinds[kc] = { ...x.kinds[kc], store }; }   // remember: this kind comes from here
+    });
+    logEvent({ type: 'in', id, name: it.name, cat: it.cat, qty, exp: exp || '', code: kc || '', store });
     closeSheet(); toast(`Tucked away ✿ ${loc ? 'on ' + loc : ''}`);
   };
 }
@@ -720,7 +731,7 @@ function openTakeOut(id, code = '') {
   const take = async (lotId, type = 'out') => {
     const lot = it.lots.find(l => l.id === lotId) || o;
     const out = await DB.mutate(id, x => { const l = x.lots.find(l => l.id === lotId) || sortLots(x.lots)[0]; if (l) l.qty--; x.lots = x.lots.filter(l => l.qty > 0); });
-    logEvent({ type, id, name: it.name, cat: it.cat, qty: 1, exp: lot.exp || '', code: effCode(it, lot), oldest: lotId === o.id });
+    logEvent({ type, id, name: it.name, cat: it.cat, qty: 1, exp: lot.exp || '', code: effCode(it, lot), store: lot.store || '', oldest: lotId === o.id });
     closeSheet();
     const left = qtyOf(out);
     if (type === 'toss') return toast(`Tossed. ${left < (out.par ?? 1) ? out.name + ' is on the shopping list' : left + ' left'}`);
@@ -1244,7 +1255,7 @@ async function switchToCostco() {
 DB.loadLocal(); render(); initCloud();
 // shared with insights.js (menu, Insights, History)
 window.SFFS = { $, $$, esc, DB, CFG, dev, openSheet, closeSheet, toast, qtyOf, sortLots, expDate, daysLeft, fmtExp, SOON,
-  orderedCats, catGroups, pic, openItem, openSettings, openShop, readLog, wide, servingsGuess, render, flowerPH };
+  orderedCats, catGroups, pic, openItem, STORES, openSettings, openShop, readLog, wide, servingsGuess, render, flowerPH };
 if (!CFG.firebase) switchToCostco();
 // deep links from notifications: ?view=shop
 if (new URLSearchParams(location.search).get('view') === 'shop') setTimeout(openShop, dev.get('splash', true) ? 3400 : 200);

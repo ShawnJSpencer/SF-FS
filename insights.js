@@ -87,7 +87,9 @@ function sampleLog() {
       const t = now - (DAYS - d) * DAY + Math.floor(rnd() * 14 + 7) * 36e5;
       if (stock <= 0 && rnd() < .12) {
         const q = 1 + Math.floor(rnd() * 3); stock += q;
-        ev.push({ t: t - 2 * 36e5, type: 'in', id: it.id, name: it.name, cat: it.cat, qty: q, who: rnd() < .6 ? A : B });
+        const stores = ['costco', 'maceys', 'sams', 'walmart'];
+        const store = rnd() < .7 ? (it.store || 'costco') : stores[Math.floor(rnd() * stores.length)];
+        ev.push({ t: t - 2 * 36e5, type: 'in', id: it.id, name: it.name, cat: it.cat, qty: q, store, who: rnd() < .6 ? A : B });
       }
       if (rnd() < rate) {
         const toss = rnd() < .045, rotP = .78 + .17 * d / DAYS;   // rotation gets better over time
@@ -145,7 +147,12 @@ function crunch(E) {
   const every = items.filter(it => isEveryday(it.cat) && perDay.get(it.id) > 0);
   const units = every.reduce((a, it) => a + S.qtyOf(it), 0), pace = every.reduce((a, it) => a + perDay.get(it.id), 0);
   const weeks = pace ? units / pace / 7 : null;
-  return { monthly, rotation, top, tossedTop, wastePct, t90: t90.length, o90: o90.length, ppl, sugg, forecast, weeks, perDay };
+  // where we buy (put-aways in the last 90 days, by store)
+  const ins = last90.filter(e => e.type === 'in' && e.store);
+  const byStore = new Map(); ins.forEach(e => byStore.set(e.store, (byStore.get(e.store) || 0) + (e.qty || 1)));
+  const multi = new Map(); ins.forEach(e => { const st = multi.get(e.name) || new Set(); st.add(e.store); multi.set(e.name, st); });
+  const shared = [...multi].filter(([, st]) => st.size > 1).sort((a, b) => b[1].size - a[1].size).slice(0, 6);
+  return { byStore, shared, monthly, rotation, top, tossedTop, wastePct, t90: t90.length, o90: o90.length, ppl, sugg, forecast, weeks, perDay };
 }
 // these never need history
 function stockHealth() {
@@ -261,6 +268,12 @@ function drawInsights(body, E) {
     <p class="note">Last 90 days: <b>${C.t90}</b> tossed, ${C.wastePct}% of everything we took out.</p>
     ${C.tossedTop.length ? `<h4>Tossed most</h4><table class="tb">${C.tossedTop.map(([n, c]) => `<tr><td>${esc(n)}</td><td class="r warn">${c}×</td></tr>`).join('')}</table><p class="note">Consider buying fewer of these, or moving them up front.</p>` : ''}</section>
 
+  <section class="card"><h3>Where we buy ${sampleChip()}</h3><p class="note">What we put away in the last 90 days, by store.</p>
+    ${C.byStore.size ? (() => { const rows = [...C.byStore].sort((a, b) => b[1] - a[1]), tot = rows.reduce((a, r) => a + r[1], 0);
+      return hbars(rows.map(([k, n]) => ({ label: S.STORES[k]?.name || k, pct: 100 * n / rows[0][1], value: `${n} · ${Math.round(100 * n / tot)}%` }))); })()
+      : '<p class="note">Nothing yet. Pick the store each time you put something away.</p>'}
+    ${C.shared.length ? `<h4>Bought at more than one store</h4><table class="tb">${C.shared.map(([n, st]) => `<tr><td>${esc(n)}</td><td class="r">${[...st].map(k => esc(S.STORES[k]?.name || k)).join(', ')}</td></tr>`).join('')}</table>` : ''}</section>
+
   <section class="card"><h3>Who's been busy ${sampleChip()}</h3><p class="note">Last 90 days.</p>
     ${C.ppl.size ? (() => { const rows = [...C.ppl]; const mx = Math.max(...rows.map(([, p]) => p.in + p.out)); return hbars(rows.map(([w, p]) => ({ label: nameOf(w), pct: 100 * (p.in + p.out) / mx, value: `${p.in} in · ${p.out} out` }))); })() : '<p class="note">Nothing yet.</p>'}</section>
 
@@ -296,7 +309,7 @@ function drawHistory(body) {
       ${list.map(e => `<div class="hev ${e.type}"><span class="dot2"></span><span class="tx"><b>${esc(nameOf(e.who))}</b> ${VERB[e.type] || e.type}
         ${e.type === 'adjust' ? `<b>${esc(e.name)}</b> (${e.qty > 0 ? '+' : ''}${e.qty})` : `${e.qty > 1 ? e.qty + ' × ' : ''}<b>${esc(e.name)}</b>`}
         ${e.type === 'out' ? (e.oldest ? '<small class="ok">· oldest ✓</small>' : '<small>· not the oldest</small>') : ''}
-        ${e.exp ? `<small>· exp ${esc(S.fmtExp(e.exp))}</small>` : ''}</span><time>${fmtTime(e.t)}</time></div>`).join('')}</div>`).join('')
+        ${e.exp ? `<small>· exp ${esc(S.fmtExp(e.exp))}</small>` : ''}${e.store && e.type === 'in' ? `<small>· from ${esc(S.STORES[e.store]?.name || e.store)}</small>` : ''}</span><time>${fmtTime(e.t)}</time></div>`).join('')}</div>`).join('')
       : `<p class="empty-note">Nothing yet. Every time someone puts something away, takes something out or tosses something, it'll show up here.</p>`}`;
   body.querySelector('.seg').onclick = e => { const b = e.target.closest('[data-mode]'); if (!b || b.dataset.mode === mode) return; mode = b.dataset.mode; drawHistory(body); };
 }
