@@ -216,8 +216,9 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 /* shelves */
 .shelfmap{display:flex;gap:10px;align-items:flex-end;overflow-x:auto;padding:8px 0 4px}
 .sm-col{display:flex;flex-direction:column;align-items:center;gap:6px}
-.sm-rows{display:flex;flex-direction:column;gap:5px}
-.sm-cell{width:92px;min-height:46px;border-radius:12px 12px 4px 4px;border-bottom:3px solid var(--muted);padding:5px 6px;text-align:left;
+.sm-rows{display:flex;flex-direction:column;justify-content:space-between;height:calc(var(--tall) * 58px - 6px)}
+.sm-col.floor .sm-rows{height:auto}
+.sm-cell{width:92px;min-height:52px;border-radius:12px 12px 4px 4px;border-bottom:3px solid var(--muted);padding:5px 6px;text-align:left;
   background:color-mix(in srgb,var(--accent) calc(var(--fill) * 55%),var(--soft))}
 .sm-cell b{display:block;font:800 13px Fraunces,serif}
 .sm-cell small{font-size:10.5px;color:var(--ink);font-weight:600}
@@ -291,9 +292,11 @@ section.cat h2 small{font:600 12px Quicksand,sans-serif;color:var(--muted);lette
 .choice button small{display:block;font:500 13px Quicksand;color:var(--muted)}
 
 /* location picker: shelves drawn as little bookcases, row 1 at the bottom */
-.shelves{display:flex;gap:12px;overflow-x:auto;padding:6px 0 4px}
+.shelves{display:flex;gap:12px;overflow-x:auto;padding:6px 0 4px;align-items:flex-end}
 .shelf{flex:none;display:flex;flex-direction:column-reverse;align-items:center;gap:3px}
 .shelf .lbl{font:italic 600 15px Fraunces,serif;margin-top:4px}
+/* all shelves the same height; rows spread evenly from the floor up */
+.shelf .srows{display:flex;flex-direction:column-reverse;justify-content:space-between;height:calc(var(--tall) * 23px - 3px)}
 .shelf button{width:34px;height:20px;border-bottom:2px solid var(--muted);font-size:11px;color:var(--muted);font-weight:700}
 .shelf button.on{color:#fff;background:var(--accent);border-radius:6px 6px 0 0;border-color:var(--accent)}
 .shelf.floor{margin-left:8px}

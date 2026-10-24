@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.7.0';
+const VERSION = '1.7.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -464,8 +464,10 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 
 /* location picker: little bookcases, row 1 at the bottom */
 function shelvesHTML(sel) {
-  return `<div class="shelves">${DB.meta.shelves.map(s => `<div class="shelf">${'<span class="lbl">' + esc(s.id) + '</span>'}${Array.from({ length: s.rows }, (_, i) =>
-    `<button type="button" data-loc="${esc(s.id)}${i + 1}" class="${sel === s.id + (i + 1) ? 'on' : ''}">${i + 1}</button>`).join('')}</div>`).join('')}
+  // Every shelf is the same height in real life, so draw them that way: a shelf with fewer rows spreads them out.
+  const tall = Math.max(...DB.meta.shelves.map(s => s.rows));
+  return `<div class="shelves" style="--tall:${tall}">${DB.meta.shelves.map(s => `<div class="shelf"><span class="lbl">${esc(s.id)}</span><div class="srows">${Array.from({ length: s.rows }, (_, i) =>
+    `<button type="button" data-loc="${esc(s.id)}${i + 1}" class="${sel === s.id + (i + 1) ? 'on' : ''}">${i + 1}</button>`).join('')}</div></div>`).join('')}
     <div class="shelf floor"><span class="lbl">Floor</span><button type="button" data-loc="Floor" class="${sel === 'Floor' ? 'on' : ''}" aria-label="Floor">▁▁</button></div></div>`;
 }
 function wireShelves(root, get, set) {

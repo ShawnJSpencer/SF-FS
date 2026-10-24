@@ -319,11 +319,11 @@ function openShelves() {
   const items = [...DB.items.values()];
   const at = loc => items.filter(i => i.loc === loc);
   const body = S.openSheet(`<h2>Shelves</h2><p class="sub">What lives where. Tap a spot to see its items.</p>
-    <div class="shelfmap">${DB.meta.shelves.map(s => `<div class="sm-col"><div class="sm-rows">${Array.from({ length: s.rows }, (_, i) => s.rows - i).map(r => {
+    <div class="shelfmap" style="--tall:${Math.max(...DB.meta.shelves.map(s => s.rows))}">${DB.meta.shelves.map(s => `<div class="sm-col"><div class="sm-rows">${Array.from({ length: s.rows }, (_, i) => s.rows - i).map(r => {
       const its = at(s.id + r), u = its.reduce((a, i) => a + S.qtyOf(i), 0);
-      return `<button class="sm-cell ${its.length ? '' : 'empty'}" data-loc="${esc(s.id + r)}" style="--fill:${Math.min(1, its.length / 12)}"><b>${esc(s.id + r)}</b><small>${its.length ? its.length + ' items · ' + u : 'empty'}</small></button>`; }).join('')}</div>
+      return `<button class="sm-cell ${its.length ? '' : 'empty'}" data-loc="${esc(s.id + r)}" style="--fill:${Math.min(1, its.length / 12)}"><b>${esc(s.id + r)}</b><small>${its.length ? its.length + (its.length === 1 ? ' item · ' : ' items · ') + u : 'empty'}</small></button>`; }).join('')}</div>
       <div class="sm-lbl">${esc(s.id)}</div></div>`).join('')}
-      <div class="sm-col floor"><div class="sm-rows"><button class="sm-cell ${at('Floor').length ? '' : 'empty'}" data-loc="Floor" style="--fill:${Math.min(1, at('Floor').length / 12)}"><b>Floor</b><small>${at('Floor').length} items</small></button></div><div class="sm-lbl">Floor</div></div>
+      <div class="sm-col floor"><div class="sm-rows"><button class="sm-cell ${at('Floor').length ? '' : 'empty'}" data-loc="Floor" style="--fill:${Math.min(1, at('Floor').length / 12)}"><b>Floor</b><small>${at('Floor').length === 1 ? '1 item' : at('Floor').length + ' items'}</small></button></div><div class="sm-lbl">Floor</div></div>
     </div>
     <p class="note">${items.filter(i => !i.loc && S.qtyOf(i) > 0).length} items on hand don't have a spot yet. <button class="link" data-loc="">See them</button></p>
     <div id="smList" class="mini"></div>
