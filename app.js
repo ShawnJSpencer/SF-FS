@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.4.1';
+const VERSION = '1.4.2';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -130,10 +130,20 @@ const flowerPH = `<svg viewBox="0 0 24 24" fill="currentColor"><g opacity=".9">$
 // Which picture to show: the package of the batch that expires first (its kind's photo),
 // otherwise the item's main photo.
 const kindName = (it, code) => code ? ((it.kinds || {})[code]?.name || '') : '';
-function showImg(it) {
+// Which kind a batch is. A batch nobody tagged counts as the item's only kind, when it has just one.
+function effCode(it, lot) {
+  if (lot?.code) return lot.code;
+  const codes = it.codes || [];
+  return codes.length === 1 ? codes[0] : '';
+}
+// The kind whose picture represents the item right now: the batch that expires first.
+function showCode(it) {
   const first = sortLots(it.lots)[0];
-  const k = first?.code && (it.kinds || {})[first.code];
-  return (k && k.img) || it.img || '';
+  return first ? effCode(it, first) : effCode(it, null);
+}
+function showImg(it) {
+  const k = (it.kinds || {})[showCode(it)];
+  return (k && k.img) || it.img || kindsOf(it).find(k => k.img)?.img || '';
 }
 const pic = (it, cls = 'thumb') => showImg(it) ? `<img class="${cls}" src="${esc(showImg(it))}" alt="" loading="lazy">` : `<div class="${cls} ph">${flowerPH}</div>`;
 
@@ -434,7 +444,7 @@ function openItem(id, preset = {}) {
   d.lots.sort((x, y) => (expDate(x.exp) || 9e15) - (expDate(y.exp) || 9e15));   // soonest first, like the picture
   const body = openSheet(`
     <div class="hero">
-      <button class="picwrap" id="pickPic">${d.img ? `<img class="pic" src="${esc(d.img)}">` : `<div class="pic ph">${flowerPH}</div>`}<small>${d.img ? 'change' : 'add photo'}</small></button>
+      <button class="picwrap" id="pickPic"></button>
       <div style="flex:1;min-width:0">
         <label class="field" style="margin:0"><span>${isNew ? 'New item' : esc(DB.meta.cats.find(c => c.id === d.cat)?.name || '')}</span>
         <input id="fName" value="${esc(d.name)}" placeholder="What is it?" style="font:italic 600 24px Fraunces,serif"></label>
@@ -479,6 +489,7 @@ function openItem(id, preset = {}) {
       : `<p class="note">None on the shelf right now.</p>`;
     const q = lots.reduce((a, l) => a + (+l.qty || 0), 0);
     $('#fSum', body).textContent = `${q} on hand · keep ${d.par ?? 1}` + (d.loc ? ` · shelf ${d.loc}` : '');
+    drawHero();
   };
   drawLots();
   body.addEventListener('click', e => {
@@ -501,7 +512,20 @@ function openItem(id, preset = {}) {
   wireShelves($('#fShelves', body), () => d.loc, v => { d.loc = v; drawLots(); });
   $('#fAddLot', body).onclick = () => { d.lots.push({ id: uid('l'), exp: '', qty: 1 }); drawLots(); };
   $('#fPar', body).oninput = e => { d.par = Math.max(0, +e.target.value || 0); drawLots(); };
-  $('#pickPic', body).onclick = () => choosePhoto(d.name, url => { d.img = url; $('#pickPic', body).innerHTML = `<img class="pic" src="${esc(url)}"><small>change</small>`; }, true);
+  // The big picture is the same one the list shows. Changing it changes that kind's photo
+  // (or the item's own photo when no kind applies).
+  function drawHero() {
+    const src = showImg(d);
+    $('#pickPic', body).innerHTML = (src ? `<img class="pic" src="${esc(src)}">` : `<div class="pic ph">${flowerPH}</div>`) + `<small>${src ? 'change' : 'add photo'}</small>`;
+  }
+  const setHero = url => {
+    const c = showCode(d);
+    if (c && (d.kinds || {})[c]) { collect(); d.kinds = { ...d.kinds }; d.kinds[c] = { ...d.kinds[c], img: url }; drawKinds(); }
+    else d.img = url;
+    drawHero();
+  };
+  drawHero();
+  $('#pickPic', body).onclick = () => choosePhoto(d.name, setHero, null, showImg(d) ? () => setHero('') : null);
   $('#fCancel', body).onclick = closeSheet;
   if (!isNew) $('#fDel', body).onclick = async () => { if (confirm(`Remove ${d.name} from the app entirely?`)) { await DB.deleteItem(d.id); closeSheet(); toast('Removed'); } };
   const collect = () => {
@@ -521,6 +545,7 @@ function openItem(id, preset = {}) {
       <button class="link mute" data-rmkind="${esc(k.code)}" aria-label="Remove this barcode" style="font-size:22px;padding:0 4px">×</button></div>`).join('')}</div>`
       : `<p class="note">No barcodes yet. Scan one and it'll show up here.</p>`;
     if (kindsOf(d).length) $('#fKindTip', body)?.classList.remove('hidden');
+    drawHero();
   };
   drawKinds();
   body.addEventListener('click', e => { const c = e.target.dataset?.kpic; if (c == null) return;
@@ -528,7 +553,9 @@ function openItem(id, preset = {}) {
     choosePhoto(`${d.name} ${k.name || ''}`.trim(), url => { collect(); d.kinds = { ...(d.kinds || {}) }; d.kinds[c] = { ...(d.kinds[c] || {}), img: url }; drawKinds(); drawLots(); }, e.target.closest('.lot'));
   });
   body.addEventListener('click', e => { const c = e.target.dataset?.rmkind; if (c == null) return;
-    collect(); dropKind(d, c); drawKinds(); toast('Barcode removed (tap Save to keep it that way)'); });
+    collect();
+    if (d.img && d.img === (d.kinds || {})[c]?.img) d.img = '';   // that photo came from this kind
+    dropKind(d, c); drawKinds(); drawHero(); toast('Barcode removed (tap Save to keep it that way)'); });
   // scanning or typing a kind saves what's on screen first, then comes back here
   const attach = async code => { if (!collect()) return; await DB.saveItem(d); attachKind(d.id, code); };
   $('#fScanKind', body).onclick = async () => { if (!collect()) return; await DB.saveItem(d); openScanner({ attach: d.id }); };
@@ -563,18 +590,20 @@ function shrink(file, max = 420) {
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); res(c.toDataURL('image/jpeg', .72)); };
     img.src = URL.createObjectURL(file); });
 }
-function choosePhoto(name, cb, anchor) {
+function choosePhoto(name, cb, anchor, onRemove) {
   const pop = document.createElement('div');
   pop.className = 'choice';
   pop.innerHTML = `<button class="link big" data-a="file">Take or choose a photo</button>
     <button class="link big" data-a="url">Paste a picture link<small>long-press a picture online → Copy Image Address</small></button>
-    <button class="link big" data-a="web">Find one online<small>opens a picture search for “${esc(name || 'this')}”</small></button>`;
+    <button class="link big" data-a="web">Find one online<small>opens a picture search for “${esc(name || 'this')}”</small></button>
+    ${onRemove ? '<button class="link warn" data-a="rm">Remove this photo</button>' : ''}`;
   const host = anchor instanceof Element ? anchor : $('#sheetBody .hero');
   const old = $('#sheetBody .choice.photo'); if (old) { const same = old.previousElementSibling === host; old.remove(); if (same) return; }
   pop.classList.add('photo'); host.after(pop);
   pop.onclick = e => { const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
     if (a === 'file') { filePickCb = u => { cb(u); pop.remove(); }; $('#filePick').click(); }
     if (a === 'url') { const u = prompt('Paste the picture link'); if (u && /^https?:\/\//.test(u.trim())) { cb(u.trim()); pop.remove(); } }
+    if (a === 'rm') { onRemove(); pop.remove(); return; }
     if (a === 'web') window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent((name || '') + ' package')}`, '_blank');
   };
 }
@@ -616,7 +645,7 @@ function openTakeOut(id, code = '') {
   const o = lots[0], n = daysLeft(o.exp);
   const body = openSheet(`${heroHTML(it, `${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}`)}
     <h2 style="font-size:22px">Did you grab the oldest one?</h2>
-    <p class="sub">${kindName(it, o.code) ? `It's the <b>${esc(kindName(it, o.code))}</b>. ` : ''}${o.exp ? `The soonest one expires <b style="color:${n <= SOON ? 'var(--warn)' : 'var(--ink)'}">${fmtExp(o.exp)}</b>${fmtLeft(o.exp) ? ' — ' + fmtLeft(o.exp) : ''}${o.qty > 1 ? ` (${o.qty} of those)` : ''}.` : 'No date on this one.'}</p>
+    <p class="sub">${kindName(it, effCode(it, o)) ? `It's the <b>${esc(kindName(it, effCode(it, o)))}</b>. ` : ''}${o.exp ? `The soonest one expires <b style="color:${n <= SOON ? 'var(--warn)' : 'var(--ink)'}">${fmtExp(o.exp)}</b>${fmtLeft(o.exp) ? ' — ' + fmtLeft(o.exp) : ''}${o.qty > 1 ? ` (${o.qty} of those)` : ''}.` : 'No date on this one.'}</p>
     <div class="choice">
       <button class="link big flourish" id="toYes">Yes, that one</button>
       ${lots.length > 1 ? `<button class="link big" id="toOther">I took a different one</button>` : ''}
@@ -632,7 +661,7 @@ function openTakeOut(id, code = '') {
   $('#toCancel', body).onclick = closeSheet;
   if (lots.length > 1) $('#toOther', body).onclick = () => {
     const rest = lots.slice(1).sort((a, b) => (b.code === code) - (a.code === code));   // the kind you scanned first
-    $('#toLots', body).innerHTML = `<div class="sugg">${rest.map(l => `<button data-lot="${l.id}">${kindName(it, l.code) ? esc(kindName(it, l.code)) + ' · ' : ''}expires ${l.exp ? fmtExp(l.exp) : '— no date'} <small>· ${l.qty} there</small></button>`).join('')}</div>`;
+    $('#toLots', body).innerHTML = `<div class="sugg">${rest.map(l => `<button data-lot="${l.id}">${kindName(it, effCode(it, l)) ? esc(kindName(it, effCode(it, l))) + ' · ' : ''}expires ${l.exp ? fmtExp(l.exp) : '— no date'} <small>· ${l.qty} there</small></button>`).join('')}</div>`;
   };
   $('#toLots', body).onclick = e => { const b = e.target.closest('[data-lot]'); if (b) take(b.dataset.lot); };
 }
