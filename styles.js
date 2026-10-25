@@ -9,65 +9,97 @@
   const noise = (freq, alpha, color = '0 0 0', oct = 2) =>
     `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='${oct}' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 ${color.split(' ')[0]} 0 0 0 0 ${color.split(' ')[1]} 0 0 0 0 ${color.split(' ')[2]} 0 0 0 ${alpha} 0'/></filter><rect width='220' height='220' filter='url(#n)'/></svg>`)}")`;
 
-  /* A .50 BMG cartridge drawn to its real measurements in millimeters (tip at the top):
-     copper-jacketed bullet with a knurled cannelure, bottleneck brass case with a faint annealing
-     tint on the neck and shoulder, rimless base with its extractor groove, a slick of gun oil and
-     a little tarnish. `p` keeps the ids unique when it's drawn inline. */
-  function cartridge(p) {
-    const sym = pts => 'M' + pts.map(([x, y]) => `${x} ${y}`).join(' L') + ' L' + pts.slice().reverse().map(([x, y]) => `${-x} ${y}`).join(' L') + 'Z';
+  /* Cartridges drawn to their real measurements in millimeters (tip at the top, y = 0):
+     jacketed bullet (knurled cannelure on rifle rounds, lead for the .22), brass case — bottleneck
+     with a faint annealing tint, straight pistol case, or the .22's rim — the extractor groove,
+     a slick of gun oil and a little tarnish. `p` keeps ids unique when drawn inline. */
+  const CARTS = {
+    // L overall, C case, D base, Ds shoulder, neck, bd bullet, nk/sb = neck start / shoulder base measured up from the base
+    '22':  { L: 25.4, C: 15.6, D: 5.7, rim: 6.9, bd: 5.7, nose: 'round', og: .4, lead: 1 },
+    '9':   { L: 29.7, C: 19.15, D: 9.93, mouth: 9.65, bd: 9.01, nose: 'round', og: .32 },
+    '45':  { L: 32.4, C: 22.8, D: 12, mouth: 12, bd: 11.48, nose: 'round', og: .36 },
+    '556': { L: 57.4, C: 44.7, D: 9.6, Ds: 9, neck: 6.43, bd: 5.7, nk: 39.6, sb: 36.5, nose: 'spitzer', og: .66, can: 1 },
+    '308': { L: 71.1, C: 51.2, D: 11.96, Ds: 11.53, neck: 8.72, bd: 7.82, nk: 43.4, sb: 39.6, nose: 'spitzer', og: .66, can: 1 },
+    '50':  { L: 138, C: 99, D: 20.4, Ds: 18, neck: 14.2, bd: 12.98, nk: 85.6, sb: 78.5, nose: 'spitzer', og: .64, can: 1 }
+  };
+  function cartridge(p, k = '50') {
+    const c = CARTS[k], { L, D } = c, u = D / 20.4, mouth = L - c.C, bw = c.bd / 2;
+    const sym = pts => 'M' + pts.map(([x, y]) => `${x.toFixed(3)} ${y.toFixed(3)}`).join(' L') + ' L' + pts.slice().reverse().map(([x, y]) => `${(-x).toFixed(3)} ${y.toFixed(3)}`).join(' L') + 'Z';
     const BR = `<stop offset="0" stop-color="#1c1309"/><stop offset=".1" stop-color="#5a3f16"/><stop offset=".25" stop-color="#cfa65c"/><stop offset=".31" stop-color="#f4e1a6"/><stop offset=".38" stop-color="#c49647"/><stop offset=".6" stop-color="#76551f"/><stop offset=".8" stop-color="#9b7837"/><stop offset=".92" stop-color="#47320f"/><stop offset="1" stop-color="#150e06"/>`;
-    const body = sym([[9, 59.5], [10.2, 128.6]]), shoulder = sym([[7.1, 52.4], [9, 59.6]]),
-      groove = sym([[8.6, 130.4], [8.6, 133.3]]), rim = sym([[10.2, 134.9], [10.2, 137.4], [9.8, 138]]),
-      bevel1 = sym([[10.2, 128.5], [8.6, 130.5]]), bevel2 = sym([[8.6, 133.2], [10.2, 135]]),
-      whole = sym([[7.1, 39], [7.1, 52.4], [9, 59.5], [10.2, 128.6], [8.6, 130.4], [8.6, 133.3], [10.2, 134.9], [10.2, 137.4], [9.8, 138]]),
-      bullet = 'M-.6 .5 Q0 -.15 .6 .5 C2.3 3.3 5.7 12.6 6.49 25 L6.49 39.6 L-6.49 39.6 L-6.49 25 C-5.7 12.6 -2.3 3.3 -.6 .5Z';
+    const JK = c.lead
+      ? `<stop offset="0" stop-color="#18181b"/><stop offset=".14" stop-color="#47474e"/><stop offset=".3" stop-color="#a9a9b2"/><stop offset=".37" stop-color="#d4d4dc"/><stop offset=".48" stop-color="#707078"/><stop offset=".76" stop-color="#3c3c42"/><stop offset=".9" stop-color="#55555c"/><stop offset="1" stop-color="#141416"/>`
+      : `<stop offset="0" stop-color="#220b04"/><stop offset=".12" stop-color="#682a10"/><stop offset=".28" stop-color="#e09a70"/><stop offset=".36" stop-color="#f6c8a4"/><stop offset=".46" stop-color="#b05c2c"/><stop offset=".74" stop-color="#6a2c12"/><stop offset=".88" stop-color="#8c4626"/><stop offset="1" stop-color="#1e0a03"/>`;
+    // the case, in parts so each is shaded across its own width
+    const parts = [];
+    let whole, bodyTop, bodyBot = L - .46 * D;
+    if (c.rim) {   // .22: straight case, wide rim, no groove
+      bodyTop = mouth; bodyBot = L - .19 * D;
+      parts.push(sym([[D / 2, mouth], [D / 2, bodyBot]]), sym([[c.rim / 2, bodyBot], [c.rim / 2, L - .03 * D], [c.rim / 2 - .03 * D, L]]));
+      whole = sym([[D / 2, mouth], [D / 2, bodyBot], [c.rim / 2, bodyBot], [c.rim / 2, L - .03 * D], [c.rim / 2 - .03 * D, L]]);
+    } else {
+      const base = [[D / 2, L - .46 * D], [.42 * D, L - .37 * D], [.42 * D, L - .23 * D], [D / 2, L - .15 * D], [D / 2, L - .03 * D], [.48 * D, L]];
+      if (c.neck) {
+        bodyTop = L - c.sb;
+        parts.push(sym([[c.neck / 2, mouth], [c.neck / 2, L - c.nk]]), sym([[c.neck / 2, L - c.nk - .01], [c.Ds / 2, L - c.sb]]), sym([[c.Ds / 2, L - c.sb - .01], [D / 2, bodyBot]]));
+        whole = sym([[c.neck / 2, mouth], [c.neck / 2, L - c.nk], [c.Ds / 2, L - c.sb], ...base]);
+      } else {
+        bodyTop = mouth;
+        parts.push(sym([[c.mouth / 2, mouth], [D / 2, bodyBot]]));
+        whole = sym([[c.mouth / 2, mouth], ...base]);
+      }
+      parts.push(sym([[D / 2, L - .46 * D], [.42 * D, L - .37 * D]]), sym([[.42 * D, L - .37 * D], [.42 * D, L - .23 * D]]), sym([[.42 * D, L - .231 * D], [D / 2, L - .15 * D]]), sym([[D / 2, L - .151 * D], [D / 2, L - .03 * D], [.48 * D, L]]));
+    }
+    // the bullet: cylinder from inside the case, then the ogive to the tip
+    const og0 = mouth * (1 - c.og);   // where the nose starts curving
+    const nose = c.nose === 'spitzer'
+      ? `C${bw.toFixed(3)} ${(og0 * .52).toFixed(3)} ${(bw * .2).toFixed(3)} ${(og0 * .05).toFixed(3)} ${(bw * .06).toFixed(3)} 0 L${(-bw * .06).toFixed(3)} 0 C${(-bw * .2).toFixed(3)} ${(og0 * .05).toFixed(3)} ${(-bw).toFixed(3)} ${(og0 * .52).toFixed(3)}`
+      : `C${bw.toFixed(3)} ${(og0 * .42).toFixed(3)} ${(bw * .4).toFixed(3)} 0 0 0 C${(-bw * .4).toFixed(3)} 0 ${(-bw).toFixed(3)} ${(og0 * .42).toFixed(3)}`;
+    const bullet = `M${bw} ${mouth + .6 * u} L${bw} ${og0} ${nose} ${-bw} ${og0} L${-bw} ${mouth + .6 * u}Z`;
+    const lw = v => (v * u).toFixed(3);
+    const yb = (bodyTop + bodyBot) / 2;
     return `<defs>
-      <linearGradient id="${p}br">${BR}</linearGradient>
-      <linearGradient id="${p}cu"><stop offset="0" stop-color="#220b04"/><stop offset=".12" stop-color="#682a10"/><stop offset=".28" stop-color="#e09a70"/><stop offset=".36" stop-color="#f6c8a4"/><stop offset=".46" stop-color="#b05c2c"/><stop offset=".74" stop-color="#6a2c12"/><stop offset=".88" stop-color="#8c4626"/><stop offset="1" stop-color="#1e0a03"/></linearGradient>
-      <linearGradient id="${p}an" gradientUnits="userSpaceOnUse" x1="0" y1="39" x2="0" y2="74"><stop offset="0" stop-color="#6a4a8a" stop-opacity=".22"/><stop offset=".35" stop-color="#4a6296" stop-opacity=".15"/><stop offset=".62" stop-color="#a0603a" stop-opacity=".2"/><stop offset="1" stop-color="#a0603a" stop-opacity="0"/></linearGradient>
+      <linearGradient id="${p}br">${BR}</linearGradient><linearGradient id="${p}cu">${JK}</linearGradient>
+      <linearGradient id="${p}an" gradientUnits="userSpaceOnUse" x1="0" y1="${mouth}" x2="0" y2="${mouth + (bodyTop - mouth) + 12 * u}"><stop offset="0" stop-color="#6a4a8a" stop-opacity="${c.neck ? .22 : 0}"/><stop offset=".35" stop-color="#4a6296" stop-opacity="${c.neck ? .15 : 0}"/><stop offset=".62" stop-color="#a0603a" stop-opacity="${c.neck ? .2 : 0}"/><stop offset="1" stop-color="#a0603a" stop-opacity="0"/></linearGradient>
       <linearGradient id="${p}sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3d0" stop-opacity=".28"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
-      <linearGradient id="${p}gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".75"/><stop offset=".7" stop-color="#000" stop-opacity=".35"/><stop offset="1" stop-color="#ffe9b0" stop-opacity=".25"/></linearGradient>
       <linearGradient id="${p}oil" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5aa8"/><stop offset=".3" stop-color="#58d4ff"/><stop offset=".6" stop-color="#9bff7a"/><stop offset="1" stop-color="#ffd25a"/></linearGradient>
-      <pattern id="${p}kn" width=".75" height="3" patternUnits="userSpaceOnUse"><rect width=".75" height="3" fill="#3a1608"/><rect width=".32" height="3" fill="#c97f55"/></pattern>
+      <pattern id="${p}kn" width="${lw(.75)}" height="${lw(3)}" patternUnits="userSpaceOnUse"><rect width="${lw(.75)}" height="${lw(3)}" fill="#3a1608"/><rect width="${lw(.32)}" height="${lw(3)}" fill="#c97f55"/></pattern>
       <clipPath id="${p}cc"><path d="${whole}"/></clipPath><clipPath id="${p}bc"><path d="${bullet}"/></clipPath>
-      <filter id="${p}bl" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation=".45"/></filter>
-      <filter id="${p}bl2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.1"/></filter>
-      <filter id="${p}tn" filterUnits="userSpaceOnUse" x="-11" y="-1" width="22" height="140"><feTurbulence type="fractalNoise" baseFrequency="1.3" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .1  0 0 0 0 .06  0 0 0 0 .02  2.4 0 0 0 -1.25"/></filter>
+      <filter id="${p}bl" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="${lw(.45)}"/></filter>
+      <filter id="${p}bl2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${lw(1.1)}"/></filter>
+      <filter id="${p}tn" filterUnits="userSpaceOnUse" x="${-D}" y="-1" width="${2 * D}" height="${L + 2}"><feTurbulence type="fractalNoise" baseFrequency="${(1.3 / u).toFixed(3)}" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .1  0 0 0 0 .06  0 0 0 0 .02  2.4 0 0 0 -1.25"/></filter>
     </defs>
     <path d="${bullet}" fill="url(#${p}cu)"/>
     <g clip-path="url(#${p}bc)">
-      <rect x="-6.5" y="34.3" width="13" height="2.7" fill="url(#${p}kn)"/>
-      <rect x="-6.5" y="34.3" width="13" height="2.7" fill="url(#${p}cu)" opacity=".45"/>
-      <path d="M-6.5 34.3 H6.5 M-6.5 37 H6.5" stroke="#1a0802" stroke-width=".35" opacity=".7"/>
-      <path d="M-.5 2.2 C-1.6 6, -3 14, -3.15 25 L-3.15 34" stroke="#fff1e2" stroke-width=".8" fill="none" opacity=".55" filter="url(#${p}bl)"/>
-      <path d="M1.2 4 C2.6 9, 4.4 17, 4.9 25 L4.9 34" stroke="#ffd9c0" stroke-width=".4" fill="none" opacity=".2" filter="url(#${p}bl)"/>
-      <rect x="-7" y="-1" width="14" height="41" fill="#000" filter="url(#${p}tn)" opacity=".35"/>
+      ${c.can ? `<rect x="${-bw}" y="${mouth - 4.7 * u}" width="${2 * bw}" height="${2.7 * u}" fill="url(#${p}kn)"/><rect x="${-bw}" y="${mouth - 4.7 * u}" width="${2 * bw}" height="${2.7 * u}" fill="url(#${p}cu)" opacity=".45"/>
+      <path d="M${-bw} ${mouth - 4.7 * u} H${bw} M${-bw} ${mouth - 2 * u} H${bw}" stroke="#1a0802" stroke-width="${lw(.35)}" opacity=".7"/>` : ''}
+      ${c.lead ? `<path d="M${-bw} ${mouth - 1.2 * u} H${bw}" stroke="#2a2a30" stroke-width="${lw(.6)}" opacity=".7"/>` : ''}
+      <path d="M${(-bw * .08).toFixed(3)} ${(og0 * .06).toFixed(3)} C${(-bw * .25).toFixed(3)} ${(og0 * .25).toFixed(3)} ${(-bw * .46).toFixed(3)} ${(og0 * .6).toFixed(3)} ${(-bw * .48).toFixed(3)} ${og0} L${(-bw * .48).toFixed(3)} ${mouth}" stroke="#fff1e2" stroke-width="${lw(.8)}" fill="none" opacity=".55" filter="url(#${p}bl)"/>
+      <path d="M${(bw * .2).toFixed(3)} ${(og0 * .12).toFixed(3)} C${(bw * .4).toFixed(3)} ${(og0 * .35).toFixed(3)} ${(bw * .7).toFixed(3)} ${(og0 * .7).toFixed(3)} ${(bw * .75).toFixed(3)} ${og0} L${(bw * .75).toFixed(3)} ${mouth}" stroke="#ffd9c0" stroke-width="${lw(.4)}" fill="none" opacity=".2" filter="url(#${p}bl)"/>
+      <rect x="${-bw - 1}" y="-1" width="${2 * bw + 2}" height="${mouth + 2}" fill="#000" filter="url(#${p}tn)" opacity=".35"/>
     </g>
-    <path d="M7.1 39 L7.1 52.5 L-7.1 52.5 L-7.1 39Z" fill="url(#${p}br)"/>
-    <path d="${shoulder}" fill="url(#${p}br)"/><path d="${shoulder}" fill="url(#${p}sh)"/>
-    <path d="${body}" fill="url(#${p}br)"/>
-    <path d="${bevel1}" fill="url(#${p}br)"/><path d="${bevel1}" fill="#000" opacity=".35"/>
-    <path d="${groove}" fill="url(#${p}br)"/><path d="${groove}" fill="url(#${p}gr)"/>
-    <path d="${bevel2}" fill="url(#${p}br)"/><path d="${bevel2}" fill="#fff0c0" opacity=".14"/>
-    <path d="${rim}" fill="url(#${p}br)"/>
+    ${parts.map((d, i) => `<path d="${d}" fill="url(#${p}br)"/>`).join('')}
+    ${c.neck ? `<path d="${parts[1]}" fill="url(#${p}sh)"/>` : ''}
     <g clip-path="url(#${p}cc)">
-      <rect x="-11" y="38" width="22" height="40" fill="url(#${p}an)"/>
-      <path d="M-11 39.15 H11" stroke="#140c04" stroke-width=".55" opacity=".8"/><path d="M-11 39.75 H11" stroke="#fff1c4" stroke-width=".3" opacity=".35"/>
-      <rect x="-3.6" y="40" width=".9" height="12" fill="#fffbe8" opacity=".5" filter="url(#${p}bl)"/>
-      <path d="M-3.4 53 L-4.4 59.5" stroke="#fffbe8" stroke-width="1.1" opacity=".55" filter="url(#${p}bl)"/>
-      <path d="M-4.5 61 L-4.9 127" stroke="#fffbe8" stroke-width="1.2" opacity=".75" filter="url(#${p}bl)"/>
-      <path d="M5.4 62 L5.9 126" stroke="#fff3cf" stroke-width=".6" opacity=".2" filter="url(#${p}bl)"/>
-      <path d="M-11 137.45 H11" stroke="#fff1c4" stroke-width=".25" opacity=".3"/>
-      <ellipse cx="1.4" cy="93" rx="4.6" ry="17" transform="rotate(-11 1.4 93)" fill="url(#${p}oil)" opacity=".1" filter="url(#${p}bl2)"/>
-      <path d="M-1.6 79 C-.6 88, .4 98, 3.4 108" stroke="#fffdf2" stroke-width=".7" fill="none" opacity=".3" filter="url(#${p}bl)"/>
-      <ellipse cx="-3.4" cy="112" rx="3.2" ry="6" fill="#000" opacity=".16" filter="url(#${p}bl2)"/>
-      <circle cx="-4.1" cy="86" r=".4" fill="#fff" opacity=".85"/><circle cx="2.6" cy="101.5" r=".28" fill="#fff" opacity=".7"/>
-      <rect x="-11" y="38" width="22" height="101" fill="#000" filter="url(#${p}tn)" opacity=".28"/>
+      ${c.rim ? '' : `<rect x="${-D}" y="${L - .37 * D}" width="${2 * D}" height="${.14 * D}" fill="#000" opacity=".45"/><rect x="${-D}" y="${L - .46 * D}" width="${2 * D}" height="${.09 * D}" fill="#000" opacity=".3"/><rect x="${-D}" y="${L - .23 * D}" width="${2 * D}" height="${.08 * D}" fill="#fff0c0" opacity=".14"/>`}
+      ${c.rim ? `<rect x="${-D}" y="${L - .19 * D}" width="${2 * D}" height="${.04 * D}" fill="#000" opacity=".35"/>` : ''}
+      <rect x="${-D}" y="${mouth - 1}" width="${2 * D}" height="${bodyTop - mouth + 14 * u}" fill="url(#${p}an)"/>
+      <path d="M${-D} ${mouth + .15 * u} H${D}" stroke="#140c04" stroke-width="${lw(.55)}" opacity=".8"/><path d="M${-D} ${mouth + .75 * u} H${D}" stroke="#fff1c4" stroke-width="${lw(.3)}" opacity=".35"/>
+      ${c.neck ? `<rect x="${(-c.neck * .26).toFixed(3)}" y="${mouth + u}" width="${lw(.9)}" height="${(L - c.nk - mouth - 1.5 * u).toFixed(3)}" fill="#fffbe8" opacity=".5" filter="url(#${p}bl)"/>
+      <path d="M${(-c.neck * .24).toFixed(3)} ${L - c.nk + .6 * u} L${(-c.Ds * .245).toFixed(3)} ${L - c.sb}" stroke="#fffbe8" stroke-width="${lw(1.1)}" opacity=".55" filter="url(#${p}bl)"/>` : ''}
+      <path d="M${(-D * .22).toFixed(3)} ${bodyTop + 1.5 * u} L${(-D * .24).toFixed(3)} ${bodyBot - .2 * u}" stroke="#fffbe8" stroke-width="${lw(1.2)}" opacity=".75" filter="url(#${p}bl)"/>
+      <path d="M${(D * .26).toFixed(3)} ${bodyTop + 2.5 * u} L${(D * .29).toFixed(3)} ${bodyBot - .5 * u}" stroke="#fff3cf" stroke-width="${lw(.6)}" opacity=".2" filter="url(#${p}bl)"/>
+      <path d="M${-D} ${L - .03 * D} H${D}" stroke="#fff1c4" stroke-width="${lw(.25)}" opacity=".3"/>
+      <ellipse cx="${(D * .07).toFixed(3)}" cy="${yb.toFixed(3)}" rx="${(D * .23).toFixed(3)}" ry="${((bodyBot - bodyTop) * .26).toFixed(3)}" transform="rotate(-11 ${(D * .07).toFixed(3)} ${yb.toFixed(3)})" fill="url(#${p}oil)" opacity=".1" filter="url(#${p}bl2)"/>
+      <path d="M${(-D * .08).toFixed(3)} ${(yb - (bodyBot - bodyTop) * .2).toFixed(3)} C${(-D * .03).toFixed(3)} ${yb.toFixed(3)} ${(D * .02).toFixed(3)} ${(yb + (bodyBot - bodyTop) * .1).toFixed(3)} ${(D * .17).toFixed(3)} ${(yb + (bodyBot - bodyTop) * .22).toFixed(3)}" stroke="#fffdf2" stroke-width="${lw(.7)}" fill="none" opacity=".3" filter="url(#${p}bl)"/>
+      <circle cx="${(-D * .2).toFixed(3)}" cy="${(yb - (bodyBot - bodyTop) * .1).toFixed(3)}" r="${lw(.4)}" fill="#fff" opacity=".85"/>
+      <rect x="${-D}" y="${mouth - 1}" width="${2 * D}" height="${L - mouth + 2}" fill="#000" filter="url(#${p}tn)" opacity=".28"/>
     </g>
-    <path d="${whole}" fill="none" stroke="#0e0904" stroke-width=".35" opacity=".75"/>
-    <path d="${bullet}" fill="none" stroke="#120602" stroke-width=".3" opacity=".7"/>`;
+    <path d="${whole}" fill="none" stroke="#0e0904" stroke-width="${lw(.35)}" opacity=".75"/>
+    <path d="${bullet}" fill="none" stroke="#120602" stroke-width="${lw(.3)}" opacity=".7"/>`;
   }
-  const cartURI = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-11 -1 22 140">${cartridge('c')}</svg>`)}")`;
+  // a whole cartridge as a stand-alone picture (for the menu petals and the Armory opening)
+  const cartSVG = (k = '50') => { const c = CARTS[k], m = c.D * .55; return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} -.6 ${2 * m} ${c.L + 1.2}">${cartridge('c', k)}</svg>`; };
+  const cartURI = `url("data:image/svg+xml,${encodeURIComponent(cartSVG('50'))}")`;
 
   /* A show-ribbon rosette for the Equestrian menu: pleated outer ruffle, a second ruffle, a gold
      ring, the center disk, and two swallow-tailed ribbons hanging in an upside-down V. Drawn with
@@ -329,5 +361,5 @@
   const el = document.createElement('style'); el.id = 'styleSheet'; el.textContent = css;
   document.head.append(el);
 
-  window.SFFS_STYLES = { list: STYLES, byId, resolveColor, barColors, artFor, season, ART };
+  window.SFFS_STYLES = { list: STYLES, byId, resolveColor, barColors, artFor, season, ART, cartSVG, CARTS };
 })();

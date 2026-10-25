@@ -19,11 +19,13 @@
   // random numbers that are the same every time (the scene looks designed, not noisy)
   const rng = seed => () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
 
-  function layer(host, z, css = '') {
+  // res < 1 draws the layer at lower resolution, which the browser smooths when it scales it up: a soft
+  // focus without a CSS blur (on iPad, Safari draws faint seams between the tiles of a blurred canvas)
+  function layer(host, z, css = '', res = 1) {
     const W = host.clientWidth, H = host.clientHeight, c = document.createElement('canvas');
     c.style.cssText = `position:absolute;inset:0;width:100%;height:100%;z-index:${z};pointer-events:none;${css}`;
-    c.width = Math.round(W * DPR); c.height = Math.round(H * DPR);
-    const x = c.getContext('2d'); x.scale(DPR, DPR);
+    const d = DPR * res; c.width = Math.round(W * d); c.height = Math.round(H * d);
+    const x = c.getContext('2d'); x.scale(d, d);
     host.append(c); return { c, x, W, H };
   }
   function off(w, h) {
@@ -137,6 +139,24 @@
     x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(8,6,4,.34)'; x.fillRect(-w / 2 - 1, -h - 1, w + 2, h + 2);
     return o;
   }
+  // the same detailed cartridges as the menu petals, drawn from styles.js
+  const CART_KEYS = ['22', '9', '45', '556', '308', '50'];
+  function loadCarts() {
+    const S = window.SFFS_STYLES;
+    if (!S || !S.cartSVG) return Promise.resolve([]);
+    return Promise.all(CART_KEYS.map(k => new Promise(res => {
+      const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null);
+      im.src = 'data:image/svg+xml,' + encodeURIComponent(S.cartSVG(k));
+    })));
+  }
+  function cartridgeImgSprite(im, key, w, h) {
+    const c = window.SFFS_STYLES.CARTS[key], m = c.D * .55, s = h / c.L, iw = 2 * m * s;
+    const o = off(Math.max(w, iw) + 2, h + 2), x = o.x;
+    x.drawImage(im, 1 + Math.max(w, iw) / 2 - m * s, 1 + h - (c.L + .6) * s, iw, (c.L + 1.2) * s);
+    // a touch darker, so the lightning has something to reveal
+    x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(8,6,4,.14)'; x.fillRect(0, 0, o.w, o.h);
+    return o;
+  }
   function hubSprite(r) {
     const o = off(r * 2 + 4, r * 2 + 4), x = o.x; x.translate(r + 2, r + 2);
     let g = x.createRadialGradient(-r * .3, -r * .35, r * .1, 0, 0, r);
@@ -155,6 +175,7 @@
   }
 
   async function armory(host, { launch }) {
+    const carts = await loadCarts();
     const W = host.clientWidth, H = host.clientHeight, r = rng(42);
     const T = launch
       ? { metal: [0, .25], rust: .05, rustV: 2.1, hub: .65, ring0: .8, ringGap: .24, f1: 2.95, f2: 3.75, words: 4.25, end: 5.4 }
@@ -162,7 +183,7 @@
     const old = oldLayers(host);
     const M = layer(host, 20, 'opacity:0'); drawMetal(M.x, W, H);
     const R = layer(host, 21);
-    const S = layer(host, 22, 'opacity:0;filter:blur(2.5px)');
+    const S = layer(host, 22, 'opacity:0', .28);   // low resolution = a soft shadow edge
     const L = layer(host, 23);
     const F = layer(host, 24, 'opacity:0;mix-blend-mode:screen');
     const words = wordsEl(host, 25, `<div style="font:400 clamp(34px,10vw,64px)/1 'Black Ops One',Impact,sans-serif;letter-spacing:.04em;color:#d8cdbb;
@@ -234,9 +255,9 @@
     /* the bullet throne: rings of rounds fanned like a throne of swords, smallest inside */
     const cx = W / 2, cy = H * .47, maxR = Math.min(W * .46, H * .36);
     const r0 = maxR * .14, gap = 3.5;
-    const nat = CAL.map(c => ({ L: 14 + c.L * .32, D: 3 + c.D * .42 }));
+    const nat = CAL.map(c => { const L = 14 + c.L * .32; return { L, D: carts.length ? L * c.D / c.L * 1.08 : 3 + c.D * .42 }; });   // true-to-life widths
     const k = (maxR - r0 - gap * 6) / nat.reduce((a, n) => a + n.L, 0);
-    const sprites = CAL.map((c, i) => cartridgeSprite(c, nat[i].D * k, nat[i].L * k));
+    const sprites = CAL.map((c, i) => carts[i] ? cartridgeImgSprite(carts[i], CART_KEYS[i], nat[i].D * k, nat[i].L * k) : cartridgeSprite(c, nat[i].D * k, nat[i].L * k));
     const hub = hubSprite(r0 * 1.12);
     const A0 = rad(-203), A1 = rad(23);   // the fan, across the top
     const rounds = [];
@@ -706,8 +727,8 @@
       old.forEach((e, i) => { e.style.transition = `transform 1.8s cubic-bezier(.5,0,.7,.3) ${i * .05}s, opacity 1.6s ease-in ${.2 + i * .05}s, filter 1.6s`; e.style.transform = `translate(${W * 1.1}px,${-H * .06}px) rotate(14deg)`; e.style.opacity = '0'; e.style.filter = 'blur(2px)'; });
     } else hideOld(old);
 
-    const SKY = layer(host, 20, 'opacity:0;filter:blur(1.2px)');
-    const MID = layer(host, 21, 'opacity:0;filter:blur(.6px)');
+    const SKY = layer(host, 20, 'opacity:0', .4);
+    const MID = layer(host, 21, 'opacity:0', .6);
     const NEAR = layer(host, 22, 'opacity:0');
     const HORSE = layer(host, 23);
     const FRONT = layer(host, 24, 'opacity:0');
