@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -575,8 +575,14 @@ function shelvesHTML(sel) {
   const tall = Math.max(...DB.meta.shelves.map(s => s.rows));
   return `<div class="shelves" style="--tall:${tall}">${DB.meta.shelves.map(s => `<div class="shelf"><span class="lbl">${esc(s.id)}</span><div class="srows">${Array.from({ length: s.rows }, (_, i) =>
     `<button type="button" data-loc="${esc(s.id)}${i + 1}" class="${sel === s.id + (i + 1) ? 'on' : ''}">${i + 1}</button>`).join('')}</div></div>`).join('')}
-    <div class="shelf floor"><span class="lbl">Floor</span><button type="button" data-loc="Floor" class="${sel === 'Floor' ? 'on' : ''}" aria-label="Floor">▁▁</button></div></div>`;
+    <div class="shelf floor"><span class="lbl">Floor</span><button type="button" data-loc="Floor" class="${sel === 'Floor' ? 'on' : ''}" aria-label="Floor">▁▁</button></div>
+    <div class="garage"><span class="glbl">Garage</span><div class="gbox">${FREEZERS.map(f =>
+      `<div class="shelf frz ${f.cls}"><span class="lbl">${f.two}</span><button type="button" data-loc="${f.id}" class="${sel === f.id ? 'on' : ''}" aria-label="${f.id}"><i></i><em>❄</em></button></div>`).join('')}</div></div></div>`;
 }
+// spots out in the garage (their own locations, not shelf rows)
+const FREEZERS = [{ id: 'Chest freezer', cls: 'chest', two: 'Chest<br>freezer' }, { id: 'Upright freezer', cls: 'upright', two: 'Upright<br>freezer' }];
+// how to say where something lives: "shelf A3", "the floor", "chest freezer"
+function where(loc) { return !loc ? '' : loc === 'Floor' ? 'floor' : FREEZERS.some(f => f.id === loc) ? loc.toLowerCase() : 'shelf ' + loc; }
 function wireShelves(root, get, set) {
   root.addEventListener('click', e => { const b = e.target.closest('[data-loc]'); if (!b) return;
     const v = get() === b.dataset.loc ? '' : b.dataset.loc; set(v);
@@ -639,7 +645,7 @@ function openItem(id, preset = {}) {
           <select class="unitsel ${d.unit ? 'set' : ''}" data-unit aria-label="Unit"><option value="">unit? ▾</option>${UNITS.map(([u]) => `<option value="${esc(u)}" ${u === d.unit ? 'selected' : ''}>${esc(unitWord(u, l.qty))} ▾</option>`).join('')}</select></span></div>`; }).join('')
       : `<p class="note">None on the shelf right now.</p>`;
     const q = lots.reduce((a, l) => a + (+l.qty || 0), 0);
-    $('#fSum', body).textContent = `${q} ${d.unit ? unitWord(d.unit, q) + ' ' : ''}on hand · keep ${d.par ?? 1}` + (d.loc ? ` · shelf ${d.loc}` : '');
+    $('#fSum', body).textContent = `${q} ${d.unit ? unitWord(d.unit, q) + ' ' : ''}on hand · keep ${d.par ?? 1}` + (d.loc ? ` · ${where(d.loc)}` : '');
     drawHero();
   };
   drawLots();
@@ -794,7 +800,7 @@ function openPutAway(id, qtyDefault = 1, code = '') {
   const ks = kindsOf(it);
   const kindPic = code && (it.kinds || {})[code]?.img;
   const body = openSheet(`<div class="hero">${kindPic ? `<img class="pic" src="${esc(kindPic)}" alt="">` : pic(it, 'pic')}<div><h2>${esc(it.name)}</h2>
-      <p class="sub">${kindName(it, code) ? esc(kindName(it, code)) + ' · ' : ''}${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}</p></div></div>
+      <p class="sub">${kindName(it, code) ? esc(kindName(it, code)) + ' · ' : ''}${qtyOf(it)} on hand${it.loc ? ' · ' + esc(where(it.loc)) : ''}</p></div></div>
     ${!code && ks.length > 1 ? `<label class="field"><span>Which kind</span><select id="paKind"><option value="">not sure</option>${ks.map((k, j) => `<option value="${esc(k.code)}">${esc(k.name || 'Kind ' + (j + 1))}</option>`).join('')}</select></label>` : ''}
     <div class="cols">
       <label class="field"><span>Expires</span><input type="month" id="paExp"></label>
@@ -802,7 +808,7 @@ function openPutAway(id, qtyDefault = 1, code = '') {
     </div>
     <p class="note" id="paHint"></p>
     <div class="field"><span>Bought at</span><div class="storepick" id="paStore">${Object.entries(STORES).map(([k, st]) => `<button type="button" data-st="${k}">${esc(st.name)}</button>`).join('')}</div></div>
-    ${it.loc ? '' : `<div class="sec-title" style="color:var(--ink)">Which shelf?</div><div id="paShelves">${shelvesHTML('')}</div>`}
+    ${it.loc ? '' : `<div class="sec-title" style="color:var(--ink)">Where does it go?</div><div id="paShelves">${shelvesHTML('')}</div>`}
     <div class="acts"><button class="link mute" id="paCancel">cancel</button><button class="link big flourish" id="paGo">Tuck it away</button></div>`);
   const lastStore = [...(it.lots || [])].reverse().find(l => l.store)?.store;
   let store = (code && (it.kinds || {})[code]?.store) || lastStore || it.store || 'costco';
@@ -830,7 +836,7 @@ function openTakeOut(id, code = '') {
   const it = DB.items.get(id), lots = sortLots(it.lots);
   if (!lots.length) return toast(`No ${it.name} on the shelf`);
   const o = lots[0], n = daysLeft(o.exp);
-  const body = openSheet(`${heroHTML(it, `${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}`)}
+  const body = openSheet(`${heroHTML(it, `${qtyOf(it)} on hand${it.loc ? ' · ' + esc(where(it.loc)) : ''}`)}
     <h2 style="font-size:22px">Did you grab the oldest one?</h2>
     <p class="sub">${kindName(it, effCode(it, o)) ? `It's the <b>${esc(kindName(it, effCode(it, o)))}</b>. ` : ''}${o.exp ? `The soonest one expires <b style="color:${n <= SOON ? 'var(--warn)' : 'var(--ink)'}">${fmtExp(o.exp)}</b>${fmtLeft(o.exp) ? ' — ' + fmtLeft(o.exp) : ''}${o.qty > 1 ? ` (${o.qty} of those)` : ''}.` : 'No date on this one.'}</p>
     <div class="choice">
@@ -1064,7 +1070,7 @@ async function attachKind(id, code) {
 }
 function openFound(id, code) {
   const it = DB.items.get(id), kind = code && (it.kinds || {})[code];
-  const body = openSheet(`${heroHTML(it, `${kind?.name ? esc(kind.name) + ' · ' : ''}${qtyOf(it)} on hand${it.loc ? ' · shelf ' + esc(it.loc) : ''}`)}
+  const body = openSheet(`${heroHTML(it, `${kind?.name ? esc(kind.name) + ' · ' : ''}${qtyOf(it)} on hand${it.loc ? ' · ' + esc(where(it.loc)) : ''}`)}
     <div class="choice">
       <button class="link big flourish" id="fdIn">Putting it away<small>add to the shelf</small></button>
       <button class="link big flourish" id="fdOut">Taking one out<small>using it now</small></button>
@@ -1390,7 +1396,7 @@ idb.get('snapshot').then(snap => {
   if (changed) render();
 }).catch(() => {});
 // shared with insights.js (menu, Insights, History)
-window.SFFS = { $, $$, esc, DB, CFG, dev, openSheet, closeSheet, toast, qtyOf, sortLots, expDate, daysLeft, fmtExp, SOON,
+window.SFFS = { $, $$, esc, where, FREEZERS, DB, CFG, dev, openSheet, closeSheet, toast, qtyOf, sortLots, expDate, daysLeft, fmtExp, SOON,
   orderedCats, catGroups, pic, openItem, STORES, openSettings, openShop, readLog, wide, servingsGuess, render, flowerPH };
 if (!CFG.firebase) { switchToCostco(); sweepSoon(4000); }
 // deep links from notifications: ?view=shop

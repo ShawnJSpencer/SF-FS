@@ -4,6 +4,8 @@
 //  • once a day, alerts (phone + email) for anything within a month of expiring
 import admin from 'firebase-admin';
 import nodemailer from 'nodemailer';
+// how to say where something lives: "shelf A3", "floor", "chest freezer"
+const where = loc => !loc ? '' : loc === 'Floor' ? 'floor' : /freezer$/i.test(loc) ? loc.toLowerCase() : 'shelf ' + loc;
 import webpush from 'web-push';
 
 const H = process.env.HOUSEHOLD || 'spencer';
@@ -90,11 +92,11 @@ if (due) {
     const rows = need.filter(i => (i.store || 'costco') === k).sort((a, b) => a.name.localeCompare(b.name));
     if (!rows.length) continue;
     inner += `<div style="font:italic 600 20px Georgia,serif;margin:18px 0 4px">${name}</div><table width="100%" cellspacing="0">` +
-      rows.map(i => rowHTML(showImg(i), i.name, `have ${qtyOf(i)} · need ${(i.par ?? 1) - qtyOf(i)}${i.loc ? ' · shelf ' + esc(i.loc) : ''}`, q(i.name))).join('') + '</table>';
+      rows.map(i => rowHTML(showImg(i), i.name, `have ${qtyOf(i)} · need ${(i.par ?? 1) - qtyOf(i)}${i.loc ? ' · ' + esc(where(i.loc)) : ''}`, q(i.name))).join('') + '</table>';
   }
   const soon = soonList();
   if (soon.length) inner += `<div style="font:italic 600 20px Georgia,serif;margin:22px 0 4px;color:#c9566f">Use soon</div><table width="100%" cellspacing="0">` +
-    soon.map(({ i, l, n }) => rowHTML(showImg(i), i.name, `${n < 0 ? 'expired' : 'expires'} ${fmtExp(l.exp)} · ${l.qty} there${i.loc ? ' · shelf ' + esc(i.loc) : ''}`)).join('') + '</table>';
+    soon.map(({ i, l, n }) => rowHTML(showImg(i), i.name, `${n < 0 ? 'expired' : 'expires'} ${fmtExp(l.exp)} · ${l.qty} there${i.loc ? ' · ' + esc(where(i.loc)) : ''}`)).join('') + '</table>';
   await mail(`Shopping list · ${need.length} item${need.length === 1 ? '' : 's'}`, shell('Shopping list', inner));
   await push({ title: 'Shopping list is ready ✿', body: `${need.length} thing${need.length === 1 ? '' : 's'} to pick up`, url: './?view=shop', tag: 'report' });
   await hRef.set({ reportRequested: false, ...(meta.reportRequested || FORCE ? {} : { lastReport: todayStr }) }, { merge: true });
@@ -107,7 +109,7 @@ if (meta.lastExpiryCheck !== todayStr && hour >= Math.min(+(meta.reportHour ?? 8
   const fresh = soonList().filter(({ i, l }) => !alerted[`${i.id}|${l.exp}`]);
   if (fresh.length) {
     const inner = `<p>These are within a month of their date — time to use them up.</p><table width="100%" cellspacing="0">` +
-      fresh.map(({ i, l, n }) => rowHTML(showImg(i), i.name, `${n < 0 ? 'expired' : n + ' days left ·'} ${fmtExp(l.exp)} · ${l.qty} there${i.loc ? ' · shelf ' + esc(i.loc) : ''}`)).join('') + '</table>';
+      fresh.map(({ i, l, n }) => rowHTML(showImg(i), i.name, `${n < 0 ? 'expired' : n + ' days left ·'} ${fmtExp(l.exp)} · ${l.qty} there${i.loc ? ' · ' + esc(where(i.loc)) : ''}`)).join('') + '</table>';
     await mail(`Use soon: ${fresh.slice(0, 3).map(x => x.i.name).join(', ')}${fresh.length > 3 ? '…' : ''}`, shell('Use these soon', inner));
     await push({ title: fresh.length === 1 ? `${fresh[0].i.name} expires soon` : `${fresh.length} things expire soon`,
       body: fresh.slice(0, 4).map(x => `${x.i.name} (${fmtExp(x.l.exp)})`).join(', '), badge: soonList().length, tag: 'expiry' });
