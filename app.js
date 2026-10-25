@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.8.3';
+const VERSION = '2.0.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -9,51 +9,52 @@ const uid = (p = 'i') => p + Date.now().toString(36) + Math.random().toString(36
 const clone = o => JSON.parse(JSON.stringify(o));
 
 /* ───────────── Device-only preferences (never synced) ───────────── */
-const THEMES = [
-  ['blush', 'Blush Peony'], ['lavender', 'Lavender'], ['sage', 'Sage & Daisy'], ['buttercup', 'Buttercup'],
-  ['hydrangea', 'Hydrangea'], ['peach', 'Peach Blossom'], ['wildflower', 'Wildflower'], ['moonlit', 'Moonlit']
-];
 const dev = {
   get(k, d) { try { const v = localStorage.getItem('sffs-dev-' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('sffs-dev-' + k, JSON.stringify(v)); } catch {} }
 };
-function applyTheme(t) {
-  document.documentElement.dataset.theme = t;
-  const cs = getComputedStyle(document.documentElement);
-  const v = n => cs.getPropertyValue(n).trim();
-  $('meta[name=theme-color]').content = v(document.documentElement.classList.contains('splashing') ? '--splash' : '--bg');
-  const fl = (x, y, c, r = 4) => [0, 72, 144, 216, 288].map(a => {
-    const rad = a * Math.PI / 180;
-    return `<ellipse cx='${x + Math.cos(rad) * r * .9}' cy='${y + Math.sin(rad) * r * .9}' rx='${r * .62}' ry='${r * .42}' transform='rotate(${a} ${x + Math.cos(rad) * r * .9} ${y + Math.sin(rad) * r * .9})' fill='${c}'/>`;
-  }).join('') + `<circle cx='${x}' cy='${y}' r='${r * .38}' fill='%23f6d36b'/>`;
-  const enc = c => c.replace('#', '%23');
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34'><rect width='34' height='34' fill='%23fffaf8'/>` +
-    fl(8, 9, enc(v('--tulip1')), 5) + fl(25, 25, enc(v('--tulip2')), 4.6) + fl(26, 6, enc(v('--accent')), 3) + fl(7, 27, enc(v('--accent')), 3) +
-    `<path d='M15 15q5 -1 6 4q-5 1-6-4z M17 28q4 -2 6 1q-4 2-6-1z' fill='${enc(v('--leaf'))}'/>` +
-    `</svg>`;
-  document.documentElement.style.setProperty('--floral', `url("data:image/svg+xml,${svg.replace(/"/g, "'").replace(/</g, '%3C').replace(/>/g, '%3E')}")`);
+/* ───────────── Look: a style (fonts, textures, art) + one of its color choices, per device ───────────── */
+const STY = window.SFFS_STYLES;
+let booted = false;
+function look() {
+  const st = STY.byId(dev.get('style', 'floral'));
+  return { st: STY.artFor(st), color: STY.resolveColor(st.id, dev.get('theme', st.colors[0][0])) };
 }
-applyTheme(dev.get('theme', 'blush'));
+let flowerPH = STY.ART.flower;   // the picture for items without a photo; each style has its own
+function applyLook() {
+  const { st, color } = look(), root = document.documentElement;
+  root.dataset.style = st.id; root.dataset.theme = color[0];
+  const v = n => getComputedStyle(root).getPropertyValue(n).trim();
+  $('meta[name=theme-color]').content = v(root.classList.contains('splashing') ? '--splash' : '--bg');
+  $('#logo').innerHTML = st.logo;
+  const mb = $('#goMenu'); if (mb) mb.querySelector('svg').outerHTML = st.menu;
+  flowerPH = st.ph;
+  if (booted) render();
+}
+function setStyle(id, colorId) {
+  const st = STY.byId(id);
+  dev.set('style', st.id);
+  dev.set('theme', colorId && st.colors.some(c => c[0] === colorId) ? colorId : st.colors[0][0]);
+  applyLook();
+}
+applyLook();
 
-/* ───────────── Splash: white flowers spiral out, two tulips bloom ───────────── */
-// While the opening bloom shows, the status bar uses the bloom color; afterwards, the page color.
+/* ───────────── Opening animation ─────────────
+   Tap to skip. Hold ONE finger until it finishes for the Armory reveal, TWO fingers for Equestrian
+   (on a computer: hold the mouse button, or Shift + hold). */
+// While the opening animation shows, the status bar uses its color; afterwards, the page color.
 function endSplashColors() {
   document.documentElement.classList.remove('splashing');
   $('meta[name=theme-color]').content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
 }
-function runSplash() {
-  const sp = $('#splash');
-  if (!dev.get('splash', true)) { sp.remove(); endSplashColors(); return; }
+function particleSplash(sp, st) {
   const cv = $('#petals'), ctx = cv.getContext('2d');
   const dpr = Math.min(devicePixelRatio || 1, 2);
   const W = innerWidth, H = innerHeight;
   cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
-  // flower sprite
   const spr = document.createElement('canvas'); spr.width = spr.height = 64;
-  const s = spr.getContext('2d'); s.translate(32, 32);
-  s.fillStyle = 'rgba(255,255,255,.96)';
-  for (let k = 0; k < 5; k++) { s.save(); s.rotate(k * Math.PI * 2 / 5); s.beginPath(); s.ellipse(0, -14, 9, 14, 0, 0, Math.PI * 2); s.fill(); s.restore(); }
-  s.fillStyle = '#f6dc8a'; s.beginPath(); s.arc(0, 0, 7, 0, Math.PI * 2); s.fill();
+  const s = spr.getContext('2d'); s.translate(32, 32); (st.sprite || STY.list[0].sprite)(s);
+  if (st.art) { const a = $('.art', sp); a.innerHTML = st.art; a.hidden = false; $('.tulips', sp).style.display = 'none'; }
   const cx = W / 2, cy = H / 2, R = Math.hypot(W, H) / 2 + 24;
   const N = Math.round(Math.min(950, Math.max(380, W * H / 430)));
   const c = R / Math.sqrt(N), G = Math.PI * (3 - Math.sqrt(5));
@@ -63,7 +64,7 @@ function runSplash() {
   });
   const easeBack = t => { const k = 1.6; return 1 + (k + 1) * Math.pow(t - 1, 3) + k * Math.pow(t - 1, 2); };
   const start = performance.now();
-  function frame(now) {
+  (function frame(now) {
     const t = (now - start) / 1000;
     ctx.clearRect(0, 0, W, H);
     for (const f of fl) {
@@ -74,12 +75,47 @@ function runSplash() {
       ctx.drawImage(spr, -z / 2, -z / 2, z, z); ctx.restore();
     }
     if (t < 1.5) requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-  let done = false;
+  })(start);
+  return new Promise(res => setTimeout(res, 3300));
+}
+function runSplash() {
+  const sp = $('#splash');
+  if (!dev.get('splash', true)) { sp.remove(); endSplashColors(); return; }
+  const { st } = look();
+  let fingers = 0, mouse = 0, downAt = 0, revealing = false, done = false, skipMain = null;
   const close = () => { if (done) return; done = true; sp.classList.add('bye'); endSplashColors(); setTimeout(() => sp.remove(), 500); };
-  setTimeout(close, 3300);
-  sp.addEventListener('click', close);
+  const skip = () => { if (revealing) sp.__skip = true; else { skipMain?.(); close(); } };
+  sp.addEventListener('touchstart', e => { fingers = e.touches.length; downAt = Date.now(); e.preventDefault(); }, { passive: false });
+  sp.addEventListener('touchend', e => { fingers = e.touches.length; if (!fingers && Date.now() - downAt < 350) skip(); });
+  sp.addEventListener('touchcancel', e => { fingers = e.touches.length; });
+  sp.addEventListener('mousedown', e => { mouse = e.shiftKey ? 2 : 1; downAt = Date.now(); });
+  sp.addEventListener('mouseup', () => { const quick = Date.now() - downAt < 350; mouse = 0; if (quick) skip(); });
+  sp.addEventListener('contextmenu', e => e.preventDefault());
+
+  const reveal = async (kind, launch) => {
+    revealing = true;
+    try { await window.SFFS_REVEAL.play(kind, sp, { launch }); } catch (e) { console.warn(e); }
+    revealing = false;
+  };
+  (async () => {
+    // the opening for this device's style
+    if (st.reveal && window.SFFS_REVEAL) await reveal(st.reveal, true);
+    else await new Promise(res => { skipMain = res; particleSplash(sp, st).then(res); });
+    if (done) return;
+    // still holding? one finger → Armory, two → Equestrian
+    const held = Math.max(fingers, mouse);
+    if ((held === 1 || held === 2) && window.SFFS_REVEAL) {
+      const kind = held === 1 ? 'armory' : 'equestrian';
+      await reveal(kind, false);
+      const unlocked = dev.get('unlocked', []);
+      const first = !unlocked.includes(kind);
+      if (first) dev.set('unlocked', [...unlocked, kind]);
+      if (dev.get('style', 'floral') !== kind) dev.set('prevStyle', [dev.get('style', 'floral'), dev.get('theme', '')]);
+      setStyle(kind, dev.get('style') === kind ? dev.get('theme') : null);
+      close();
+      setTimeout(() => toast(first ? 'Secret style unlocked ✦ It’s in Settings now' : 'Welcome back ✦'), 600);
+    } else close();
+  })();
 }
 runSplash();
 
@@ -126,7 +162,6 @@ function addKind(x, code, p) {
 function dropKind(x, code) { x.codes = (x.codes || []).filter(c => c !== code); if (x.kinds) { x.kinds = { ...x.kinds }; delete x.kinds[code]; } }
 const ownerOf = code => [...DB.items.values()].find(i => (i.codes || []).some(c => normCode(c) === code));
 const normCode = c => { c = String(c).trim(); return /^\d{12}$/.test(c) ? '0' + c : c; };
-const flowerPH = `<svg viewBox="0 0 24 24" fill="currentColor"><g opacity=".9">${[0, 72, 144, 216, 288].map(a => `<ellipse cx="12" cy="6.5" rx="3.2" ry="4.6" transform="rotate(${a} 12 12)"/>`).join('')}</g><circle cx="12" cy="12" r="2.6" fill="#f6d36b"/></svg>`;
 // Which picture to show: the package of the batch that expires first (its kind's photo),
 // otherwise the item's main photo.
 // "ReadyWise 124 serv" → 124
@@ -562,7 +597,7 @@ function openItem(id, preset = {}) {
       <button class="picwrap" id="pickPic"></button>
       <div style="flex:1;min-width:0">
         <label class="field" style="margin:0"><span>${isNew ? 'New item' : esc(DB.meta.cats.find(c => c.id === d.cat)?.name || '')}</span>
-        <input id="fName" value="${esc(d.name)}" placeholder="What is it?" style="font:italic 600 24px Fraunces,serif"></label>
+        <input id="fName" value="${esc(d.name)}" placeholder="What is it?" style="font:var(--fi) 600 24px var(--fd)"></label>
         <div class="note" id="fSum"></div>
       </div>
     </div>
@@ -1173,16 +1208,21 @@ function openShop() {
 
 /* ───────────── Settings ───────────── */
 function openSettings() {
-  const theme = dev.get('theme', 'blush'), m = DB.meta;
-  const sw = t => { const holder = document.createElement('div'); holder.dataset.theme = t; document.body.append(holder);
+  const m = DB.meta;
+  const unlocked = dev.get('unlocked', []);
+  const styles = STY.list.filter(x => !x.secret || unlocked.includes(x.id));
+  // a little color swatch, read from the real style + color tokens
+  const sw = (t, styleId = dev.get('style', 'floral')) => { const holder = document.createElement('div'); holder.dataset.style = styleId; holder.dataset.theme = t === 'hol-auto' ? STY.resolveColor('holiday', 'hol-auto')[0] : t; document.body.append(holder);
     const cs = getComputedStyle(holder), g = n => cs.getPropertyValue(n).trim();
     const css = `background:conic-gradient(from 200deg,${g('--tulip1')} 0 30%,${g('--tulip2')} 0 55%,${g('--leaf')} 0 68%,${g('--bg')} 0 100%)`;
     holder.remove(); return css; };
   const signedIn = DB.mode === 'cloud' && DB.user;
   const body = openSheet(`<h2>Settings</h2>
-    <div class="setsec">Colors <span class="note">— just for this device</span></div>
-    <div class="themes">${THEMES.map(([k, n]) => `<button class="sw ${k === theme ? 'on' : ''}" data-theme-pick="${k}"><i style="${sw(k)}"></i>${n}</button>`).join('')}</div>
-    <label class="toggle"><span>Opening bloom</span><input type="checkbox" id="stSplash" ${dev.get('splash', true) ? 'checked' : ''}></label>
+    <div class="setsec">Style <span class="note">— just for this device</span></div>
+    <div class="styles" id="stStyles"></div>
+    <div class="setsec">Colors</div>
+    <div class="themes" id="stColors"></div>
+    <label class="toggle"><span>Opening animation</span><input type="checkbox" id="stSplash" ${dev.get('splash', true) ? 'checked' : ''}></label>
     <button class="link" id="stReplay" style="margin-top:8px">watch it again</button>
 
     <div class="setsec">Sync</div>
@@ -1224,12 +1264,23 @@ function openSettings() {
     <div class="bigcode"><svg viewBox="-12 0 169 1" preserveAspectRatio="none" shape-rendering="crispEdges"><use href="#ilyPath"/></svg></div>
     <p class="note" style="text-align:center">Scan me with the app ✿</p>
     <p class="note" style="text-align:center;margin-top:26px">SF-FS v${VERSION}</p>`);
+  function drawLooks() {
+    const cur = dev.get('style', 'floral'), curC = dev.get('theme', '');
+    $('#stStyles', body).innerHTML = styles.map(x => { const c0 = x.colors.find(c => c[0] !== 'hol-auto')[0];
+      return `<button class="stycard ${x.id === cur ? 'on' : ''}" data-style-pick="${x.id}" data-style="${x.id}" data-theme="${x.id === cur ? STY.resolveColor(x.id, curC)[0] : (x.id === 'holiday' ? STY.resolveColor('holiday', 'hol-auto')[0] : c0)}">
+        <span class="sty-art">${STY.artFor(x).logo}</span><span class="sty-txt"><b>${esc(x.name)}</b><small>${x.secret ? 'secret ✦ ' : ''}${esc(x.blurb)}</small></span></button>`; }).join('');
+    const st = STY.byId(cur);
+    $('#stColors', body).innerHTML = st.colors.map(([k, n]) => `<button class="sw ${k === (curC || st.colors[0][0]) ? 'on' : ''}" data-theme-pick="${k}"><i style="${sw(k, cur)}"></i>${esc(n)}</button>`).join('');
+  }
+  drawLooks();
   const drawShelves = () => { $('#stShelves', body).innerHTML = DB.meta.shelves.map((s, i) => `<div class="toggle"><span class="serif" style="font-size:20px;font-style:italic">Shelf ${esc(s.id)}</span>
     <span class="step"><button data-sm="${i}">−</button><b>${s.rows}</b><button data-sp="${i}">+</button> <span class="note">rows</span></span></div>`).join(''); };
   drawShelves();
   body.addEventListener('click', async e => {
     const t = e.target.closest('[data-theme-pick]');
-    if (t) { dev.set('theme', t.dataset.themePick); applyTheme(t.dataset.themePick); $$('.sw', body).forEach(x => x.classList.toggle('on', x === t)); }
+    if (t) { dev.set('theme', t.dataset.themePick); applyLook(); drawLooks(); }
+    const sb = e.target.closest('[data-style-pick]');
+    if (sb) { setStyle(sb.dataset.stylePick); drawLooks(); }
     const sm = e.target.dataset.sm, sp = e.target.dataset.sp;
     if (sm != null || sp != null) { const sh = clone(DB.meta.shelves), i = sm ?? sp; sh[i].rows = Math.max(1, Math.min(12, sh[i].rows + (sp != null ? 1 : -1))); await DB.saveMeta({ shelves: sh }); drawShelves(); }
   });
@@ -1327,7 +1378,7 @@ async function switchToCostco() {
     DB.persistLocal(); render();
   }
 }
-DB.loadLocal(); render(); initCloud();
+DB.loadLocal(); booted = true; render(); initCloud();
 idb.get('snapshot').then(snap => {
   if (!snap?.items || DB.mode === 'cloud') return;   // the cloud already answered: it's newer
   let changed = false;
