@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.8.2';
+const VERSION = '1.8.3';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
