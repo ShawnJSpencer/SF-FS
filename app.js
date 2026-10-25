@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.8.1';
+const VERSION = '1.8.2';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -443,9 +443,13 @@ document.addEventListener('click', e => {
   if (c) jumpToCat(c.dataset.cat);
   if (e.target.id === 'addFromSearch') openItem(null, { name: query });
 });
-$('#q').addEventListener('input', e => { query = e.target.value; $('#qx').hidden = !query; render(); });
+$('#q').addEventListener('input', e => { query = e.target.value; render(); });
+// the ✕ only shows while you're in the search bar
+$('#q').addEventListener('focus', () => { $('#qx').hidden = false; });
+$('#q').addEventListener('blur', () => { $('#qx').hidden = true; });
+$('#qx').addEventListener('pointerdown', e => e.preventDefault());   // keep the search bar focused so the tap lands
 $('#qx').addEventListener('click', e => {
-  e.preventDefault(); const q = $('#q'); q.value = ''; query = ''; $('#qx').hidden = true; q.blur(); render();
+  e.preventDefault(); const q = $('#q'); q.value = ''; query = ''; q.blur(); render();
 });
 
 // The list scrolls inside #scroller. Never use scrollIntoView here: on iPhone it can

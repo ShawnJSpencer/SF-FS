@@ -380,7 +380,13 @@ html.splashing,html.splashing body{background:var(--splash)}
    ≥700px: categories become cards that flow into columns, like her graph-paper page;
            item windows open centered instead of sliding up from the bottom.
    ≥1100px: "Use soon" moves to its own column on the right. */
-@keyframes cardGlow{0%{box-shadow:0 0 0 3px var(--accent2),0 10px 30px -22px var(--ink)}100%{box-shadow:0 1px 0 var(--soft),0 10px 30px -22px var(--ink)}}
+/* tapped category: a soft glow from behind the card, two beats */
+@keyframes cardGlow{
+  0%{box-shadow:0 1px 0 var(--soft),0 0 0 0 transparent}
+  18%{box-shadow:0 0 0 3px var(--accent2),0 0 34px 10px color-mix(in srgb,var(--accent) 55%,transparent)}
+  40%{box-shadow:0 0 0 2px var(--accent2),0 0 14px 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+  62%{box-shadow:0 0 0 3px var(--accent2),0 0 34px 10px color-mix(in srgb,var(--accent) 55%,transparent)}
+  100%{box-shadow:0 1px 0 var(--soft),0 10px 30px -22px var(--ink)}}
 @media (min-width:700px){
   header,main{max-width:1240px}
   header,main{padding-left:max(28px,env(safe-area-inset-left));padding-right:max(28px,env(safe-area-inset-right))}
@@ -389,7 +395,7 @@ html.splashing,html.splashing body{background:var(--splash)}
   #list .col{flex:1;min-width:0;display:flex;flex-direction:column;gap:20px}
   section.cat{margin:0;
     background:var(--card);border-radius:22px;padding:14px 16px 6px;box-shadow:0 1px 0 var(--soft),0 10px 30px -22px var(--ink);scroll-margin-top:64px}
-  section.cat.glow{animation:cardGlow 1.6s ease}
+  section.cat.glow{animation:cardGlow 2.2s ease-in-out;position:relative;z-index:1}
   section.cat h2{font-size:21px;justify-content:space-between;border-bottom:1.5px solid var(--soft);padding-bottom:8px;margin-bottom:2px}
   .item{grid-template-columns:38px 1fr auto;gap:10px;padding:7px 0}
   .thumb{width:38px;height:38px;border-radius:11px}
