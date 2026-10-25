@@ -433,127 +433,266 @@
     x.fillStyle = '#c9a24d'; x.beginPath(); x.arc(sx, base - h - 14 * s, 6 * s, 0, TAU); x.fill();
   }
 
-  /* the horse: a white horse seen from the side, so close only the legs, belly, tail and the
-     rider's boot in the stirrup show. Legs are jointed and driven by a canter cycle; the jump
-     blends to a tucked, airborne pose and back. */
-  function horseRig(LL) {
-    return { LL, BL: LL * 1.55,
-      F: [LL * .40, LL * .33, LL * .13], Hd: [LL * .40, LL * .38, LL * .13],
-      wF: [LL * .14, LL * .068, LL * .062, LL * .048], wH: [LL * .19, LL * .075, LL * .064, LL * .05] };
+  /* ── The horse ──
+     A white horse seen from low down and close, so mostly legs show. Real proportions, in units of
+     LL (ground-to-belly height): legs as long as the barrel is deep, knees and hocks where they
+     belong, slim cannons. Hooves stay planted while they carry weight (the legs bend to reach
+     them), each swinging leg follows a path, and the jump has a proper arc: the front end lifts,
+     the body sails over in slow motion, then the hindquarters come up so the folded hind legs clear
+     the top rail. Body frame: x toward the nose, y down, origin on the belly line between the legs. */
+  const LEG = {
+    // root, bone lengths [upper, cannon, pastern], hoof height, which way the middle joint bends,
+    // the pastern's angle when standing (degrees; 90 = straight down), widths down the leg
+    F: { root: [.6, 0], L: [.47, .35, .115], hoof: .1, bend: -1, pst: 50, w: [.22, .155, .118, .084, .116, .078, .09] },
+    H: { root: [-.6, -.02], L: [.45, .42, .115], hoof: .1, bend: 1, pst: 56, w: [.3, .19, .148, .094, .122, .084, .096] }
+  };
+  const HOOF = [[.03, -.005], [.078, .1], [-.044, .1], [-.052, .03], [-.032, -.01]];   // standing hoof, around the coronet
+  function ik(R, T, L1, L2, bend) {
+    const dx = T.x - R.x, dy = T.y - R.y, phi = Math.atan2(dy, dx);
+    const d = clamp(Math.hypot(dx, dy), Math.abs(L1 - L2) + .5, (L1 + L2) * .999);
+    const a = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1)), an = phi + bend * a;
+    return { J: { x: R.x + Math.cos(an) * L1, y: R.y + Math.sin(an) * L1 }, F: { x: R.x + Math.cos(phi) * d, y: R.y + Math.sin(phi) * d } };
   }
-  // angles in degrees from straight down; positive points toward the horse's nose
-  function gaitFront(p) {
-    if (p < .45) { const s = p / .45; return [lerp(24, -26, s), 0, -12 * Math.sin(Math.PI * s)]; }
-    const s = (p - .45) / .55; return [lerp(-26, 24, E.io(s)), 100 * Math.sin(Math.PI * Math.min(1, s * 1.15)), 45 * Math.sin(Math.PI * s)];
+  // a smooth path through keyframes [[s, x, y], …] (Catmull-Rom)
+  function spline(keys, s) {
+    let i = 0; while (i < keys.length - 2 && s > keys[i + 1][0]) i++;
+    const k0 = keys[Math.max(0, i - 1)], k1 = keys[i], k2 = keys[i + 1], k3 = keys[Math.min(keys.length - 1, i + 2)];
+    const u = clamp((s - k1[0]) / (k2[0] - k1[0])), u2 = u * u, u3 = u2 * u;
+    const out = [];
+    for (const c of [1, 2]) {
+      const m1 = (k2[c] - k0[c]) * .5, m2 = (k3[c] - k1[c]) * .5;
+      out.push((2 * u3 - 3 * u2 + 1) * k1[c] + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * k2[c] + (u3 - u2) * m2);
+    }
+    return out;
   }
-  function gaitHind(p) {
-    if (p < .42) { const s = p / .42; return [lerp(-4, -42, s), lerp(14, -24, s), -10 * Math.sin(Math.PI * s)]; }
-    const s = (p - .42) / .58; return [lerp(-42, -4, E.io(s)), lerp(-24, 14, E.io(s)) + 62 * Math.sin(Math.PI * s), 50 * Math.sin(Math.PI * s)];
-  }
-  const JF = u => u < .14 ? [lerp(24, -10, u / .14), 0, 0] : u < .72 ? [72, 150, 40] : [lerp(72, 26, E.smooth(seg(u, .72, 1))), lerp(150, 0, E.smooth(seg(u, .72, .95))), 0];
-  const JH = u => u < .3 ? [lerp(-20, -52, u / .3), lerp(0, -70, u / .3), 0] : u < .7 ? [-55, -40 + 60 * seg(u, .3, .7), 30] : [lerp(-55, -6, seg(u, .7, 1)), lerp(20, 10, seg(u, .7, 1)), 10];
-  function legPoints(root, segs, ang, hind) {
-    // hind: angles are [gaskin, cannon (absolute), pastern fold]; front: [forearm, knee fold, pastern fold]
-    const pts = [root]; let a = rad(ang[0]), p = root;
-    const step = (len, an) => { const q = { x: p.x + Math.sin(an) * len, y: p.y + Math.cos(an) * len }; pts.push(q); p = q; return an; };
-    step(segs[0], a);
-    const cannon = hind ? rad(ang[1]) : a - rad(ang[1]);
-    step(segs[1], cannon);
-    step(segs[2], cannon - rad(ang[2]) + rad(hind ? 18 : 20));
-    return pts;
-  }
-  function drawLeg(x, pts, widths, near, hind) {
-    const col = near ? '#f8f6f1' : '#d2cec4', shade = near ? 'rgba(168,160,148,.75)' : 'rgba(120,114,104,.6)';
+  // a tapered, jointed leg through root → knee/hock → fetlock → coronet, with the hoof
+  function drawLeg(x, P, spec, LL, psi, near) {
+    const [R, J, F, C] = P, w = spec.w.map(v => v * LL), mid = (a, b, k = .5) => ({ x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k) });
+    const pts = [R, mid(R, J, .45), J, mid(J, F), F, mid(F, C), C];
+    const dirTop = Math.atan2(J.y - R.y, J.x - R.x);
+    pts.unshift({ x: R.x - Math.cos(dirTop) * w[0] * .5, y: R.y - Math.sin(dirTop) * w[0] * .5 }); const ww = [w[0] * 1.05, ...w];
+    // how far each side sits from the bone: the fetlock and the gaskin bulge out behind
+    const back = [.5, .5, .56, .5, .5, .62, .5, .5], hind = spec === LEG.H;
+    if (hind) back[2] = .62;
+    const L = [], Rr = [];
+    pts.forEach((p, i) => {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      let dx = b.x - a.x, dy = b.y - a.y; const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
+      const nx = -dy, ny = dx;   // points behind the leg when it hangs down
+      L.push({ x: p.x + nx * ww[i] * back[i], y: p.y + ny * ww[i] * back[i] }); Rr.push({ x: p.x - nx * ww[i] * (1 - back[i]), y: p.y - ny * ww[i] * (1 - back[i]) });
+    });
+    const outline = () => {
+      x.beginPath(); x.moveTo(L[0].x, L[0].y);
+      for (let i = 1; i < L.length - 1; i++) x.quadraticCurveTo(L[i].x, L[i].y, (L[i].x + L[i + 1].x) / 2, (L[i].y + L[i + 1].y) / 2);
+      x.lineTo(L[L.length - 1].x, L[L.length - 1].y); x.lineTo(Rr[Rr.length - 1].x, Rr[Rr.length - 1].y);
+      for (let i = Rr.length - 2; i > 0; i--) x.quadraticCurveTo(Rr[i].x, Rr[i].y, (Rr[i].x + Rr[i - 1].x) / 2, (Rr[i].y + Rr[i - 1].y) / 2);
+      x.lineTo(Rr[0].x, Rr[0].y); x.closePath();
+    };
+    const g = x.createLinearGradient(R.x, R.y, C.x, C.y);
+    if (near) { g.addColorStop(0, '#f9f8f4'); g.addColorStop(.18, '#f9f8f4'); g.addColorStop(.45, '#f3f1ec'); g.addColorStop(.8, '#e2ded6'); g.addColorStop(1, '#cdc8bf'); }
+    else { g.addColorStop(0, '#d9d5cc'); g.addColorStop(.6, '#cbc6bc'); g.addColorStop(1, '#b4aea4'); }
+    outline(); x.fillStyle = g; x.fill();
+    x.beginPath(); x.arc(R.x, R.y, w[0] * .5, 0, TAU); x.fill();
+    // the point of the hock, and the knee's flat front
+    const jn = Math.atan2(F.y - J.y, F.x - J.x);
+    const bn = { x: -Math.sin(jn), y: Math.cos(jn) };   // 'behind', across the cannon
+    // shading: down the back of the leg, a touch of light down the front
+    x.save(); outline(); x.clip();
     x.lineCap = 'round'; x.lineJoin = 'round';
-    const quads = [];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1], w1 = widths[i], w2 = widths[i + 1];
-      const ang = Math.atan2(b.y - a.y, b.x - a.x), nx = -Math.sin(ang), ny = Math.cos(ang);
-      quads.push({ a, b, w1, w2, nx, ny });
-      x.beginPath();
-      x.moveTo(a.x + nx * w1 / 2, a.y + ny * w1 / 2); x.lineTo(b.x + nx * w2 / 2, b.y + ny * w2 / 2);
-      x.lineTo(b.x - nx * w2 / 2, b.y - ny * w2 / 2); x.lineTo(a.x - nx * w1 / 2, a.y - ny * w1 / 2); x.closePath();
-      x.fillStyle = col; x.fill();
-      x.beginPath(); x.arc(b.x, b.y, w2 * (i === 0 ? .66 : .6), 0, TAU); x.fill();   // knobby knee/hock, round fetlock
-    }
-    if (hind) {   // the point of the hock sticks out behind
-      const q = quads[0], b = q.b; x.beginPath(); x.ellipse(b.x - q.w2 * .55, b.y - q.w2 * .35, q.w2 * .42, q.w2 * .55, .3, 0, TAU); x.fillStyle = col; x.fill();
-    }
-    // a soft shadow down the back of the leg (the sun is in front and above)
-    for (const q of quads) {
-      x.strokeStyle = shade; x.lineWidth = Math.max(1.2, q.w2 * .16);
-      const side = q.ny > 0 ? -1 : 1;
-      x.beginPath(); x.moveTo(q.a.x + side * q.nx * q.w1 * .42, q.a.y + side * q.ny * q.w1 * .42); x.lineTo(q.b.x + side * q.nx * q.w2 * .42, q.b.y + side * q.ny * q.w2 * .42); x.stroke();
-    }
-    // hoof
-    const a = pts[pts.length - 2], b = pts[pts.length - 1], ang = Math.atan2(b.y - a.y, b.x - a.x), hw = widths[3] * 1.5, hh = widths[3] * 1.15;
-    x.save(); x.translate(b.x, b.y); x.rotate(ang - Math.PI / 2);
-    x.fillStyle = '#3b3733'; x.beginPath(); x.moveTo(-hw * .45, -2); x.lineTo(hw * .45, -2); x.lineTo(hw * .62, hh); x.lineTo(-hw * .55, hh); x.closePath(); x.fill();
-    x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(hw * .2, 0, hw * .2, hh * .9);
+    const edge = (arr, col, wd) => { x.strokeStyle = col; x.lineWidth = wd; x.beginPath(); x.moveTo(arr[0].x, arr[0].y); for (let i = 1; i < arr.length; i++) x.lineTo(arr[i].x, arr[i].y); x.stroke(); };
+    edge(L.slice(2), near ? 'rgba(150,140,126,.3)' : 'rgba(90,84,76,.3)', LL * .05);
+    edge(L.slice(2), near ? 'rgba(130,121,108,.32)' : 'rgba(80,74,66,.3)', LL * .016);
+    if (near) edge(Rr.slice(3, 6), 'rgba(255,255,255,.7)', LL * .012);
+    // tendons down the back of the cannon
+    if (near) { const a = mid(J, F, .18), b = mid(J, F, .82), off = w[3] * .2; x.strokeStyle = 'rgba(160,150,138,.38)'; x.lineWidth = LL * .006; x.beginPath(); x.moveTo(a.x + bn.x * off, a.y + bn.y * off); x.lineTo(b.x + bn.x * off, b.y + bn.y * off); x.stroke(); }
+    x.restore();
+    // hoof, turned with the pastern
+    x.save(); x.translate(C.x, C.y); x.rotate(psi - rad(spec.pst)); x.scale(LL, LL);
+    x.beginPath(); HOOF.forEach(([hx, hy], i) => i ? x.lineTo(hx, hy) : x.moveTo(hx, hy)); x.closePath();
+    const hg = x.createLinearGradient(-.05, 0, .08, .1); hg.addColorStop(0, near ? '#3b3734' : '#2b2826'); hg.addColorStop(.6, near ? '#58524c' : '#3a3632'); hg.addColorStop(1, near ? '#2a2725' : '#1f1d1b');
+    x.fillStyle = hg; x.fill();
+    x.fillStyle = near ? '#a39d93' : '#7d776f'; x.beginPath(); x.moveTo(-.034, -.012); x.lineTo(.032, -.007); x.lineTo(.036, .006); x.lineTo(-.04, .006); x.closePath(); x.fill();   // coronet band
+    if (near) { x.strokeStyle = 'rgba(255,255,255,.22)'; x.lineWidth = .008; x.beginPath(); x.moveTo(.04, .01); x.lineTo(.066, .09); x.stroke(); }
     x.restore();
   }
-  function drawHorse(x, rig, hx, hy, poses, t, airborne, W, H) {
-    const { LL, BL } = rig;
-    const fRoot = { x: hx + BL * .30, y: hy - LL * .06 }, hRoot = { x: hx - BL * .31, y: hy - LL * .14 };
-    const legs = {
-      FR: legPoints({ x: fRoot.x + LL * .03, y: fRoot.y }, rig.F, poses.FR, false), HR: legPoints({ x: hRoot.x + LL * .03, y: hRoot.y }, rig.Hd, poses.HR, true),
-      FL: legPoints(fRoot, rig.F, poses.FL, false), HL: legPoints(hRoot, rig.Hd, poses.HL, true)
+  // the barrel, chest and hindquarters (the back runs off the top of the screen), the tack and the rider's leg
+  function drawTail(x, LL, b, t, stream) {
+    x.save(); x.translate(b.x, b.y); x.rotate(-b.th); x.scale(LL, LL);
+    const px = 1 / LL;
+    // tail: the dock, then long white hair streaming behind
+    x.save(); x.translate(-.9, -.74);
+    x.fillStyle = '#efede7'; x.beginPath(); x.moveTo(-.02, -.05); x.quadraticCurveTo(-.09, .05, -.1 - stream * .05, .3); x.lineTo(-.05 - stream * .04, .32); x.quadraticCurveTo(-.03, .08, .04, -.02); x.closePath(); x.fill();
+    // the hair: a soft, full shape that flares toward the end, then fine strands over it
+    const wv1 = Math.sin(t * 3.1) * .05, wv2 = Math.sin(t * 2.3 + 1) * .07;
+    const spine = (u, k) => {   // point along the tail; k = -1…1 across it
+      const P = [[-.06, .08], [-.1 - stream * .12, .36], [-.15 - stream * .3 + wv1, .72 - stream * .22], [-.12 - stream * .58 + wv2, 1.08 - stream * .36]];
+      const m = 1 - u, c = [m * m * m, 3 * m * m * u, 3 * m * u * u, u * u * u];
+      const px0 = c.reduce((a, cc, i) => a + cc * P[i][0], 0), py0 = c.reduce((a, cc, i) => a + cc * P[i][1], 0);
+      const u2 = Math.min(1, u + .01), m2 = 1 - u2, c2 = [m2 * m2 * m2, 3 * m2 * m2 * u2, 3 * m2 * u2 * u2, u2 * u2 * u2];
+      const dx = c2.reduce((a, cc, i) => a + cc * P[i][0], 0) - px0 || -1e-3, dy = c2.reduce((a, cc, i) => a + cc * P[i][1], 0) - py0, n = Math.hypot(dx, dy) || 1;
+      const wd = .035 + .085 * Math.sin(Math.PI * Math.min(1, u * .62 + .05)) + .02 * u;
+      const ripple = Math.sin(u * 9 - t * 5 + k * 2) * .008 * u;
+      return [px0 - dy / n * wd * k + ripple, py0 + dx / n * wd * k];
     };
-    // far-side legs first
-    drawLeg(x, legs.HR, rig.wH, false, true); drawLeg(x, legs.FR, rig.wF, false);
-    // tail: long white strands streaming back
-    const tr = { x: hx - BL * .6, y: hy - LL * .62 };
-    x.fillStyle = '#f4f2ec'; x.beginPath(); x.ellipse(tr.x + LL * .02, tr.y - LL * .04, LL * .05, LL * .1, .5, 0, TAU); x.fill();
-    for (let i = 0; i < 26; i++) {
-      const ph = i / 26, len = LL * (.7 + ph * .26), stream = airborne ? .95 : .48 + .1 * Math.sin(t * 5 + i);
-      const w1 = Math.sin(t * 4.6 + i * .25) * LL * .04, w2 = Math.sin(t * 3.7 + i * .35) * LL * .045;
-      x.strokeStyle = `rgba(${i % 4 ? '251,250,246' : '206,201,190'},${.55 + (i % 3) * .15})`; x.lineWidth = LL * (.005 + (i % 4) * .0028); x.lineCap = 'round';
-      x.beginPath(); x.moveTo(tr.x, tr.y);
-      x.bezierCurveTo(tr.x - LL * .12 * stream, tr.y + len * .3 + w1, tr.x - len * .5 * stream + w2, tr.y + len * .65,
-        tr.x - len * .62 * stream + w1 - ph * LL * .08, tr.y + len * (airborne ? .62 : .95));
-      x.stroke();
-    }
-    // the barrel (belly) — the top runs off the top of the screen
-    // outline: rounded hindquarters behind, belly, then the chest sweeping forward into the neck
     x.beginPath();
-    x.moveTo(hx - BL * .5, hy - LL * 1.6);
-    x.bezierCurveTo(hx - BL * .6, hy - LL * 1.25, hx - BL * .66, hy - LL * .8, hx - BL * .58, hy - LL * .5);   // buttock
-    x.bezierCurveTo(hx - BL * .54, hy - LL * .28, hx - BL * .44, hy - LL * .14, hx - BL * .32, hy - LL * .06);  // down the back of the thigh
-    x.bezierCurveTo(hx - BL * .12, hy + LL * .02, hx + BL * .12, hy + LL * .02, hx + BL * .28, hy - LL * .02);  // belly
-    x.bezierCurveTo(hx + BL * .42, hy - LL * .06, hx + BL * .5, hy - LL * .2, hx + BL * .53, hy - LL * .42);   // chest
-    x.bezierCurveTo(hx + BL * .57, hy - LL * .62, hx + BL * .66, hy - LL * .85, hx + BL * .74, hy - LL * 1.15); // neck rising forward
-    x.lineTo(hx + BL * .82, hy - LL * 1.8); x.lineTo(hx - BL * .5, hy - LL * 1.8); x.closePath();
-    const bg = x.createLinearGradient(0, hy - LL * .7, 0, hy + 2);
-    bg.addColorStop(0, '#ffffff'); bg.addColorStop(.72, '#f2f0eb'); bg.addColorStop(1, '#cdc9bf');
-    x.fillStyle = bg; x.fill();
-    x.strokeStyle = 'rgba(150,145,135,.35)'; x.lineWidth = 1.5; x.stroke();
-    // muscle shading at shoulder and stifle
-    x.strokeStyle = 'rgba(160,155,145,.25)'; x.lineWidth = LL * .02;
-    x.beginPath(); x.arc(fRoot.x - LL * .02, fRoot.y - LL * .2, LL * .18, .6, 1.9); x.stroke();
-    x.beginPath(); x.arc(hRoot.x + LL * .02, hRoot.y - LL * .22, LL * .22, .9, 2.3); x.stroke();
-    // purple saddle pad with white piping, and the girth
-    const padL = hx + BL * .02, padR = hx + BL * .3, padB = hy - LL * .29;
-    x.beginPath(); x.moveTo(padL, -H); x.lineTo(padL, padB - LL * .05); x.quadraticCurveTo(padL, padB, padL + LL * .06, padB); x.lineTo(padR - LL * .06, padB); x.quadraticCurveTo(padR, padB, padR, padB - LL * .05); x.lineTo(padR, -H); x.closePath();
-    x.fillStyle = '#6b3fa0'; x.fill();
-    x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = LL * .009; x.beginPath(); x.moveTo(padL + LL * .025, -H); x.lineTo(padL + LL * .025, padB - LL * .045); x.quadraticCurveTo(padL + LL * .025, padB - LL * .022, padL + LL * .07, padB - LL * .022); x.lineTo(padR - LL * .07, padB - LL * .022); x.quadraticCurveTo(padR - LL * .025, padB - LL * .022, padR - LL * .025, padB - LL * .045); x.lineTo(padR - LL * .025, -H); x.stroke();
-    x.fillStyle = 'rgba(40,15,60,.25)'; x.fillRect(padL, padB - LL * .012, padR - padL, LL * .012);
-    const gx = hx + BL * .24;
-    x.fillStyle = '#2a201a'; x.beginPath(); x.moveTo(gx - LL * .03, padB - LL * .02); x.lineTo(gx + LL * .03, padB - LL * .02); x.lineTo(gx + LL * .04, hy + LL * .015); x.lineTo(gx - LL * .02, hy + LL * .015); x.closePath(); x.fill();
-    x.fillStyle = '#c0c3c6'; x.fillRect(gx - LL * .025, padB + LL * .02, LL * .05, LL * .03);
-    // near-side legs
-    drawLeg(x, legs.HL, rig.wH, true, true); drawLeg(x, legs.FL, rig.wF, true);
-    // the rider's leg: white breeches, black tall boot, heel down in the stirrup
-    const sway = Math.sin(t * 9) * LL * .006 * (airborne ? 0 : 1);
-    const knee = { x: hx + BL * .2 + sway, y: padB - LL * .04 }, ankle = { x: hx + BL * .13 + sway, y: hy + LL * .015 }, toe = { x: ankle.x + LL * .12, y: ankle.y + LL * .015 };
-    x.strokeStyle = '#4a4440'; x.lineWidth = LL * .012; x.beginPath(); x.moveTo(hx + BL * .16, -H); x.lineTo(ankle.x + LL * .02, ankle.y - LL * .01); x.stroke();
-    x.strokeStyle = '#f2f0ea'; x.lineWidth = LL * .09; x.lineCap = 'round'; x.beginPath(); x.moveTo(knee.x + LL * .08, -H * .2); x.lineTo(knee.x, knee.y); x.stroke();
-    x.fillStyle = '#121214';
-    x.beginPath(); x.moveTo(knee.x - LL * .055, knee.y - LL * .03); x.lineTo(knee.x + LL * .06, knee.y - LL * .05);
-    x.lineTo(ankle.x + LL * .045, ankle.y - LL * .02); x.lineTo(toe.x, toe.y - LL * .01); x.lineTo(toe.x - LL * .005, toe.y + LL * .028);
-    x.lineTo(ankle.x - LL * .055, ankle.y + LL * .03); x.lineTo(ankle.x - LL * .04, ankle.y - LL * .04); x.closePath(); x.fill();
-    x.strokeStyle = 'rgba(255,255,255,.28)'; x.lineWidth = LL * .008; x.beginPath(); x.moveTo(knee.x + LL * .02, knee.y); x.lineTo(ankle.x + LL * .018, ankle.y - LL * .04); x.stroke();
-    x.strokeStyle = '#b8bcc0'; x.lineWidth = LL * .012; x.beginPath(); x.moveTo(ankle.x - LL * .02, ankle.y + LL * .035); x.lineTo(ankle.x + LL * .09, ankle.y + LL * .04); x.stroke();
-    return legs;
+    for (let i = 0; i <= 24; i++) { const [a, c] = spine(i / 24, -1); i ? x.lineTo(a, c) : x.moveTo(a, c); }
+    for (let i = 0; i <= 8; i++) { const k = -1 + i / 4, [a, c] = spine(1, k); x.lineTo(a, c + (1 - k * k) * .03 + (i % 2) * .012); }
+    for (let i = 24; i >= 0; i--) { const [a, c] = spine(i / 24, 1); x.lineTo(a, c); }
+    x.closePath();
+    const tg = x.createLinearGradient(-.3, 0, .05, 0); tg.addColorStop(0, '#e4e1d9'); tg.addColorStop(.5, '#f7f6f2'); tg.addColorStop(1, '#dedad1');
+    x.fillStyle = tg; x.globalAlpha = .96; x.fill(); x.globalAlpha = 1;
+    x.lineCap = 'round';
+    for (let s2 = 0; s2 < 26; s2++) {
+      const k = -.9 + 1.8 * ((s2 * 7) % 26) / 25, end = .9 + ((s2 * 13) % 9) / 90;
+      x.strokeStyle = s2 % 4 === 0 ? 'rgba(185,178,166,.55)' : 'rgba(255,255,255,.8)'; x.lineWidth = (s2 % 3 + 1) * px;
+      x.beginPath(); for (let i = 0; i <= 16; i++) { const u = .12 + (end - .12) * i / 16, [a, c] = spine(u, k); i ? x.lineTo(a, c) : x.moveTo(a, c); } x.stroke();
+    }
+    x.restore();
+    x.restore();
+  }
+  function drawBody(x, LL, b, t, air, accent) {
+    x.save(); x.translate(b.x, b.y); x.rotate(-b.th); x.scale(LL, LL);
+    const px = 1 / LL;
+    // the silhouette
+    const body = () => {
+      x.beginPath(); x.moveTo(1.08, -3);
+      x.bezierCurveTo(1.04, -1.6, 1.02, -.75, .93, -.38);          // underside of the neck to the point of the shoulder
+      x.bezierCurveTo(.89, -.2, .83, -.05, .72, .05);              // chest
+      x.quadraticCurveTo(.61, .13, .5, .06);
+      x.bezierCurveTo(.44, .035, .38, .03, .3, .03);               // behind the elbow
+      x.bezierCurveTo(.1, .03, -.12, .0, -.3, -.07);               // belly, rising to the flank
+      x.bezierCurveTo(-.4, -.11, -.46, -.13, -.48, -.1);           // tucked up into the stifle
+      x.bezierCurveTo(-.49, -.05, -.47, -.01, -.45, .03);
+      x.quadraticCurveTo(-.6, .15, -.75, .03);
+      x.bezierCurveTo(-.82, -.05, -.89, -.18, -.93, -.32);         // back of the thigh
+      x.bezierCurveTo(-.96, -.42, -.98, -.52, -.95, -.62);         // point of the buttock
+      x.bezierCurveTo(-.93, -.7, -.9, -.76, -.87, -.82);
+      x.lineTo(-.84, -3); x.closePath();
+    };
+    body(); x.fillStyle = '#f9f8f4'; x.fill();
+    x.save(); body(); x.clip();
+    // shade underneath, light from above and in front
+    const sh = x.createLinearGradient(0, -.32, 0, .07); sh.addColorStop(0, 'rgba(150,140,125,0)'); sh.addColorStop(1, 'rgba(150,140,125,.2)');
+    x.fillStyle = sh; x.fillRect(-1.2, -.35, 2.4, .45);
+    const hs = x.createLinearGradient(-1, 0, -.6, 0); hs.addColorStop(0, 'rgba(150,140,125,.28)'); hs.addColorStop(1, 'rgba(150,140,125,0)');
+    x.fillStyle = hs; x.fillRect(-1.1, -1, .5, 1.1);
+    // muscles: shoulder, elbow, flank, stifle and hamstring
+    x.lineCap = 'round';
+    const line = (d, a) => { a *= .3; for (const [wd, al] of [[.06, a * .3], [.025, a * .45], [.008, a * .6]]) { x.strokeStyle = `rgba(150,140,126,${al})`; x.lineWidth = wd; x.stroke(new Path2D(d)); } };
+    line('M.9 -.46 Q.74 -.32 .67 -.06', .3); line('M.48 -.04 Q.42 -.2 .46 -.38', .22); line('M-.27 -.09 Q-.3 -.3 -.2 -.52', .2);
+    line('M-.48 -.12 Q-.57 -.36 -.52 -.64', .22); line('M-.87 -.24 Q-.78 -.09 -.73 .01', .28); line('M.78 .0 Q.74 .03 .71 .05', .25);
+    x.restore();
+    x.strokeStyle = 'rgba(150,145,135,.25)'; x.lineWidth = 1 * px; body(); x.stroke();
+    // saddle pad: square dressage pad with white piping
+    const pad = new Path2D('M-.24 -3 L-.24 -.42 Q-.24 -.35 -.17 -.35 L.38 -.35 Q.45 -.35 .45 -.42 L.45 -3 Z');
+    x.fillStyle = 'rgba(60,50,40,.12)'; x.fillRect(-.22, -.35, .65, .025);
+    const pg = x.createLinearGradient(0, -.9, 0, -.35); pg.addColorStop(0, accent); pg.addColorStop(1, mixRGB(accent, '#000000', .18));
+    x.fillStyle = pg; x.fill(pad);
+    x.save(); x.clip(pad); x.strokeStyle = 'rgba(0,0,0,.12)'; x.lineWidth = 1 * px;
+    for (let i = -6; i < 6; i++) { x.beginPath(); x.moveTo(-.3 + i * .09, -.35); x.lineTo(-.3 + i * .09 + .5, -1.4); x.stroke(); }
+    x.restore();
+    x.strokeStyle = 'rgba(255,255,255,.92)'; x.lineWidth = 2.6 * px;
+    x.beginPath(); x.moveTo(-.215, -3); x.lineTo(-.215, -.43); x.quadraticCurveTo(-.215, -.375, -.16, -.375); x.lineTo(.37, -.375); x.quadraticCurveTo(.425, -.375, .425, -.43); x.lineTo(.425, -3); x.stroke();
+    // long dressage saddle flap
+    const flap = new Path2D('M-.03 -3 L-.03 -.57 Q-.02 -.47 .08 -.46 L.29 -.475 Q.37 -.48 .37 -.58 L.37 -3 Z');
+    const fg = x.createLinearGradient(-.03, 0, .37, 0); fg.addColorStop(0, '#16110e'); fg.addColorStop(.55, '#2a221d'); fg.addColorStop(1, '#120e0b');
+    x.fillStyle = fg; x.fill(flap);
+    x.save(); x.clip(flap); x.setLineDash([3 * px, 2.5 * px]); x.strokeStyle = 'rgba(220,210,195,.35)'; x.lineWidth = 1 * px;
+    x.beginPath(); x.moveTo(-.005, -3); x.lineTo(-.005, -.57); x.quadraticCurveTo(.0, -.495, .085, -.487); x.lineTo(.29, -.5); x.quadraticCurveTo(.345, -.505, .345, -.58); x.lineTo(.345, -3); x.stroke(); x.restore();
+    // girth: black, with its elastic ends and buckles just below the flap
+    x.fillStyle = '#1d1815'; x.beginPath(); x.moveTo(.14, -.5); x.lineTo(.25, -.5); x.lineTo(.255, .035); x.lineTo(.15, .04); x.closePath(); x.fill();
+    x.fillStyle = '#c9ccd0'; x.fillRect(.145, -.44, .045, .03); x.fillRect(.205, -.44, .045, .03);
+    x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 1 * px; for (let i = 0; i < 6; i++) { x.beginPath(); x.moveTo(.15, -.35 + i * .06); x.lineTo(.25, -.35 + i * .06); x.stroke(); }
+    // stirrup leather
+    x.fillStyle = '#2b211b'; x.fillRect(.155, -.5, .028, .4);
+    // the rider: breeches to the knee, black tall boot, heel down in the stirrup, a small spur
+    const sway = air ? 0 : Math.sin(t * 7) * .006;
+    x.save(); x.translate(sway, 0);
+    x.fillStyle = '#f1efe8'; x.beginPath(); x.moveTo(.1, -3); x.lineTo(.31, -3); x.lineTo(.3, -.7); x.lineTo(.13, -.66); x.closePath(); x.fill();
+    x.fillStyle = 'rgba(160,150,135,.25)'; x.fillRect(.1, -1.4, .04, .74);
+    const boot = new Path2D('M.135 -.68 L.295 -.74 C.27 -.5 .235 -.26 .215 -.12 C.24 -.08 .27 -.05 .285 -.005 L.265 .022 L.105 .045 C.075 .04 .062 .02 .066 -.02 C.1 -.22 .125 -.46 .135 -.68 Z');
+    const bg2 = x.createLinearGradient(.07, 0, .3, 0); bg2.addColorStop(0, '#060607'); bg2.addColorStop(.6, '#1b1b1e'); bg2.addColorStop(1, '#09090a');
+    x.fillStyle = bg2; x.fill(boot);
+    x.strokeStyle = 'rgba(255,255,255,.4)'; x.lineWidth = 2 * px; x.lineCap = 'round'; x.beginPath(); x.moveTo(.262, -.64); x.quadraticCurveTo(.23, -.38, .214, -.16); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.18)'; x.lineWidth = 5 * px; x.beginPath(); x.moveTo(.255, -.6); x.quadraticCurveTo(.228, -.38, .218, -.2); x.stroke();
+    x.strokeStyle = '#cfd3d7'; x.lineWidth = 2.2 * px; x.beginPath(); x.moveTo(.07, -.012); x.lineTo(.03, -.002); x.stroke(); x.fillStyle = '#cfd3d7'; x.beginPath(); x.arc(.028, -.002, 3 * px, 0, TAU); x.fill();
+    // stirrup iron: the near branch runs in front of the foot
+    x.strokeStyle = '#c4c9ce'; x.lineWidth = 3.2 * px; x.lineJoin = 'round';
+    x.beginPath(); x.moveTo(.125, .042); x.lineTo(.232, .03); x.moveTo(.13, .04); x.quadraticCurveTo(.12, -.06, .17, -.11); x.quadraticCurveTo(.225, -.06, .23, .03); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = 1 * px; x.beginPath(); x.moveTo(.135, .02); x.quadraticCurveTo(.13, -.05, .168, -.1); x.stroke();
+    x.restore();
+    x.restore();
+  }
+  const mixRGB = (a, b, k) => { const h = s => [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16)); const A = h(a), B = h(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * k)).join(',')})`; };
+
+  // The run, planned in "horse time": canter in on the left lead, jump, land and canter away
+  function planRun(LL, ground, jumpX) {
+    const v = 1.15, f = .85, D = .36;                       // speed (LL per second), strides per second, share of a stride a hoof is down
+    const x0 = -1.1 * LL, X = tau => x0 + v * LL * tau;
+    const P = { A: 1.8, apex: .28, up: 28, down: 22, off: .1, pre: .5, post: .9, hl: .45 };
+    const tMid = (jumpX + P.off * LL - x0) / (v * LL), A = P.A, tA = tMid - A / 2, tB = tMid + A / 2, apex = P.apex, thU = rad(P.up), thD = rad(P.down);
+    function bodyAt(tau) {
+      let y = ground - .96 * LL, th = 0;
+      const calm = clamp(1 - E.smooth(seg(tau, tA - 1.4, tA - .7)) + E.smooth(seg(tau, tB + .4, tB + 1.2)));
+      const ph = TAU * f * tau;
+      y += LL * .02 * Math.cos(ph) * calm; th += rad(1.5) * Math.sin(ph + .9) * calm;
+      if (tau > tA - P.pre && tau < tA) { th += thU * E.smooth(seg(tau, tA - P.pre, tA)); y += LL * .035 * Math.sin(Math.PI * seg(tau, tA - P.pre, tA)); }
+      else if (tau >= tA && tau < tB) { const s = (tau - tA) / A; th += (s < .5 ? thU : thD) * Math.cos(Math.PI * s); y -= LL * (apex * 4 * s * (1 - s) + .06 * s); }
+      else if (tau >= tB && tau < tB + P.post) { const k = E.smooth(seg(tau, tB, tB + P.post)); th -= thD * (1 - k); y -= LL * .06 * (1 - k); }
+      return { x: X(tau), y, th };
+    }
+    const OFF = { HR: 0, HL: .16, FR: .21, FL: .37 }, plants = { HR: [], HL: [], FR: [], FL: [] };
+    const add = (k, on, off, dx) => { const m = (on + off) / 2; plants[k].push({ on, off, x: rootAt(bodyAt(m), k, LL).x + dx * LL }); };
+    // approach: the last stride's forelegs are the take-off; then both hinds come under and push off
+    const a1 = tA - 1.14 / f;
+    for (const k in OFF) for (let n = -6; n <= (k[0] === 'F' ? 0 : 0); n++) { const on = a1 + (n + OFF[k]) / f; add(k, on, on + D / f, k[0] === 'F' && n === 0 ? -.02 : .03); }
+    add('HR', a1 + .82 / f, tA + .02, -.14); add('HL', a1 + .86 / f, tA, -.1);
+    // landing: the leading fore, the other fore, then the hinds; then canter away
+    add('FL', tB, tB + .4, .1); add('FR', tB + .1, tB + .48, .06);
+    const a2 = tB + P.hl;
+    add('HR', a2, a2 + D / f, .1); add('HL', a2 + .16 / f, a2 + (.16 + D) / f, .08);
+    for (const k in OFF) for (let n = 1; n <= 7; n++) { const on = a2 + (n + OFF[k]) / f; add(k, on, on + D / f, .03); }
+    for (const k in plants) plants[k].sort((p, q) => p.on - q.on);
+    return { v, bodyAt, plants, tMid, tA, tB, warp: tau => 1 - .15 * Math.exp(-(((tau - tMid) / .9) ** 2)) };
+  }
+  function rootAt(b, k, LL) {
+    const [rx, ry] = LEG[k[0]].root, a = -b.th, ca = Math.cos(a), sa = Math.sin(a);
+    return { x: b.x + (rx * ca - ry * sa) * LL, y: b.y + (rx * sa + ry * ca) * LL };
+  }
+  // where a leg is at horse-time tau: planted (bend to reach the hoof) or swinging along its path
+  function legPose(run, k, tau, b, LL, ground) {
+    const spec = LEG[k[0]], front = k[0] === 'F', [L1, L2, L3] = spec.L.map(v => v * LL), ps = rad(spec.pst);
+    const R = rootAt(b, k, LL), list = run.plants[k];
+    const standFet = (p, psi) => { const C = { x: p.x - .015 * LL, y: ground - spec.hoof * LL }; return { x: C.x - Math.cos(psi) * L3, y: C.y - Math.sin(psi) * L3 }; };
+    let cur = list.find(p => tau >= p.on && tau <= p.off);
+    let T, psi = ps, k01 = 0;
+    if (cur) {
+      T = standFet(cur, ps);
+      if (front) {   // under load the fetlock sinks rather than the knee buckling
+        for (let a = 0; a <= 30; a += 3) { const tt = standFet(cur, ps - rad(a)); if (Math.hypot(tt.x - R.x, tt.y - R.y) >= (L1 + L2) * .975 || a === 30) { T = tt; psi = ps - rad(a); break; } }
+      }
+    } else {
+      let i = list.findIndex(p => p.on > tau); if (i < 0) i = list.length; const prev = list[i - 1], next = list[i];
+      const lift = prev ? prev.off : next.on - .8, land = next ? next.on : lift + .8;
+      const s = clamp((tau - lift) / (land - lift));
+      const rel = (p, at) => { const r = rootAt(run.bodyAt(at), k, LL), f = standFet(p, ps); return [(f.x - r.x) / LL, (f.y - r.y) / LL]; };
+      const A = prev ? rel(prev, lift) : [front ? -.28 : -.3, .78], B = next ? rel(next, land) : [.3, .78];
+      const jump = lift <= run.tA + .05 && land >= run.tB - .05;
+      const keys = jump
+        ? (front ? [[0, ...A], [.18, -.02, .52], [.32, .12, .33], [.62, .15, .34], [.84, .36, .58], [1, ...B]]
+                 : [[0, ...A], [.1, -.46, .64], [.3, -.12, .4], [.45, -.03, .32], [.7, -.06, .34], [.86, -.24, .6], [1, ...B]])
+        : (front ? [[0, ...A], [.35, -.17, .44], [.72, .22, .55], [1, ...B]]
+                 : [[0, ...A], [.35, -.3, .56], [.7, .05, .6], [1, ...B]]);
+      const [rx, ry] = spline(keys, s);
+      T = { x: R.x + rx * LL, y: R.y + ry * LL };
+      k01 = jump ? Math.sin(Math.PI * s) ** .35 : Math.sin(Math.PI * s) ** .55;
+      psi = { fold: rad(jump ? (front ? 125 : 140) : (front ? 80 : 55)), k: k01 };
+    }
+    const { J, F } = ik(R, T, L1, L2, spec.bend);
+    let g = Math.atan2(F.y - J.y, F.x - J.x); if (g < -Math.PI / 2) g += TAU;
+    const ang = typeof psi === 'number' ? psi : lerp(ps, g + psi.fold, psi.k);
+    const C = { x: F.x + Math.cos(ang) * L3, y: F.y + Math.sin(ang) * L3 };
+    return { P: [R, J, F, C], psi: ang, planted: !!cur, R, T, Lmax: (L1 + L2) * .999 };
   }
 
   async function equestrian(host, { launch }) {
@@ -581,8 +720,7 @@
     const clouds = Array.from({ length: 5 }, () => ({ x: r() * (W + 300), y: H * (.05 + r() * .2), s: H * (.025 + r() * .03), v: 6 + r() * 10, a: .75 + r() * .2 }));
     drawMid(MID.x, W, H, yH);
 
-    const ground = H * .94, LL = Math.min(ground - H * .4, W * .92);
-    const rig = horseRig(LL);
+    const ground = H * .94, LL = Math.min(H * .52, W * 1.15);   // close and low: the legs are big
     const sc = LL / 520;
     const geo = { ground, top: .74, low: .44,
       ns: { x: W * .7, h: LL * .95, s: sc }, fs: { x: W * .7 + Math.max(56, W * .13), base: ground - H * .08, h: LL * .95 * .8, s: sc * .8 } };
@@ -595,14 +733,11 @@
       c: ['#ffffff', '#ffe4ec', '#fff5d6', '#f7cfdb'][i % 4], t0: launch ? 99 : r() * .9 }));
     const pollen = Array.from({ length: 26 }, () => ({ x: r() * W, y: r() * yH, vx: 14 + r() * 26, ph: r() * TAU }));
 
-    // the run: canter in from the left, jump the purple-and-white fence, canter away
-    const v = LL * .95, cadence = .7;
-    const jumpX = (geo.ns.x + geo.fs.x) / 2, Tj = .92;
-    const x0 = -rig.BL * .62, dist = (W + rig.BL * 1.25) - x0;
-    const tTake = (jumpX - LL * .18 - x0) / v - Tj / 2;
+    // the run: canter in from the left on the left lead, jump the purple-and-white fence, canter away
+    const plan = planRun(LL, ground, (geo.ns.x + geo.fs.x) / 2);
+    const KEYS = ['HR', 'FR', 'HL', 'FL'], dust = [];
     const fadeIn = (el, a) => el.c.style.opacity = E.io(seg(curT, a[0], a[1]));
-    let curT = 0, hyS = null, lastStanceHy = null;
-
+    let curT = 0, tau = 0, lastT = null, gone = false, shiftS = 0;
     await run(host, t => {
       curT = t;
       fadeIn(SKY, T.sky); fadeIn(MID, T.mid); fadeIn(NEAR, T.near); FRONT.c.style.opacity = E.io(seg(t, T.near[0] + .15, T.near[1] + .15));
@@ -621,46 +756,44 @@
       for (const q of pollen) { const px = (q.x + q.vx * t) % W, py = q.y + Math.sin(t * 1.4 + q.ph) * 6; p.fillStyle = 'rgba(255,250,220,.8)'; p.beginPath(); p.arc(px, py, 1.3, 0, TAU); p.fill(); }
       p.globalAlpha = 1;
 
-      // the horse
+      // the horse (its clock slows down over the fence)
       const h = HORSE.x; h.clearRect(0, 0, W, H);
-      const ht = t - T.horse;
-      if (ht > 0) {
-        const hx = x0 + v * ht;
-        const ph = (ht * cadence) % 1;
-        const gp = { HL: gaitHind(ph), HR: gaitHind((ph + .82) % 1), FL: gaitFront((ph + .8) % 1), FR: gaitFront((ph + .66) % 1) };
-        const u = (ht - tTake) / Tj, air = u > 0 && u < 1;
-        const w = air ? Math.min(E.smooth(seg(u, 0, .16)), 1 - E.smooth(seg(u, .82, 1))) : 0;
-        const poses = {};
-        for (const key of ['HL', 'HR', 'FL', 'FR']) {
-          const j = key[0] === 'F' ? JF(clamp(u + (key === 'FR' ? .03 : 0))) : JH(clamp(u + (key === 'HR' ? .04 : 0)));
-          poses[key] = gp[key].map((a, i) => lerp(a, j[i], w));
+      if (t > T.horse && !gone) {
+        const dt = lastT == null ? 0 : Math.min(.1, t - lastT); lastT = t;
+        const prevTau = tau; tau += dt * plan.warp(tau);
+        const air = tau > plan.tA && tau < plan.tB, b0 = plan.bodyAt(tau);
+        const posesAt = b => Object.fromEntries(KEYS.map(k => [k, legPose(plan, k, tau, b, LL, ground)]));
+        // a planted hoof that can't be reached pulls the body down a little (no floating hooves)
+        let poses = posesAt(b0), need = 0;
+        if (!air) for (const k of KEYS) if (poses[k].planted) {
+          const { R, T: Tg, Lmax } = poses[k], dx = Tg.x - R.x;
+          if (Math.abs(dx) < Lmax) need = Math.max(need, (Tg.y - Math.sqrt(Lmax * Lmax - dx * dx)) - R.y);
         }
-        // keep the legs on the ground: the lowest hoof in stance sets the body height
-        const probe = drawHorseProbe(rig, hx, 0, poses);
-        const stance = ['HL', 'HR', 'FL', 'FR'].filter(key => (key[0] === 'F' ? ((key === 'FL' ? (ph + .8) % 1 : (ph + .66) % 1) < .45) : ((key === 'HL' ? ph : (ph + .82) % 1) < .42)));
-        let hy;
-        if (stance.length && !air) { hy = ground - Math.max(...stance.map(k2 => probe[k2])); lastStanceHy = hy; }
-        else hy = (lastStanceHy ?? ground - LL) - (air ? 0 : LL * .015);
-        if (air) hy = (lastStanceHy ?? ground - LL) - LL * .4 * Math.sin(Math.PI * u) + LL * .05 * w;
-        hyS = hyS == null ? hy : lerp(hyS, hy, air ? .5 : .35);
+        shiftS = lerp(shiftS, need, .5);
+        const b = { ...b0, y: b0.y + shiftS };
+        if (shiftS > .5) poses = posesAt(b);
+        // sand kicked up where hooves land
+        for (const k of KEYS) for (const p of plan.plants[k]) if (p.on > prevTau && p.on <= tau)
+          for (let i = 0; i < 7; i++) dust.push({ x: p.x + (r() - .5) * LL * .08, y: ground, vx: (r() - .7) * LL * .25, vy: -LL * (.05 + r() * .12), s: LL * (.012 + r() * .02), born: t });
         // shadow on the sand
-        const lift = clamp(((ground - LL) - hyS) / (LL * .4));
-        h.fillStyle = `rgba(90,65,35,${.16 - lift * .08})`; h.beginPath(); h.ellipse(hx, ground + 2, rig.BL * (.34 - lift * .06), LL * .022, 0, 0, TAU); h.fill();
-        drawHorse(h, rig, hx, hyS, poses, t, air, W, H);
-        if (hx - rig.BL * .6 > W && t < T.words) T.words = t;           // gone: bring in the words
+        const lift = clamp((ground - .96 * LL - b.y) / (.6 * LL));
+        h.fillStyle = `rgba(90,65,35,${.18 - lift * .1})`; h.beginPath(); h.ellipse(b.x - LL * .05, ground + 3, LL * (1 - lift * .25), LL * .03, 0, 0, TAU); h.fill();
+        for (const k of KEYS) { const C = poses[k].P[3]; if (C.y > ground - LL * .16) { h.fillStyle = 'rgba(80,58,30,.22)'; h.beginPath(); h.ellipse(C.x + LL * .015, ground + 1, LL * .07, LL * .012, 0, 0, TAU); h.fill(); } }
+        // far legs, tail, near legs, then the body over the tops of the legs (the elbow and thigh overlap them)
+        drawLeg(h, poses.HR.P, LEG.H, LL, poses.HR.psi, false); drawLeg(h, poses.FR.P, LEG.F, LL, poses.FR.psi, false);
+        drawTail(h, LL, b, t, air ? .85 : .5 + .08 * Math.sin(t * 3));
+        drawLeg(h, poses.HL.P, LEG.H, LL, poses.HL.psi, true); drawLeg(h, poses.FL.P, LEG.F, LL, poses.FL.psi, true);
+        drawBody(h, LL, b, t, air, '#6b3fa0');
+        if (b.x - 1.4 * LL > W) { gone = true; if (t < T.words) T.words = t; }   // gone: bring in the words
+      }
+      for (const d of dust) {
+        const a = t - d.born; if (a > 1.3) continue;
+        h.fillStyle = `rgba(205,180,140,${.45 * (1 - a / 1.3)})`; h.beginPath(); h.arc(d.x + d.vx * a, d.y + d.vy * a + LL * .08 * a * a, d.s * (1 + a * 1.5), 0, TAU); h.fill();
       }
       if (t > T.words) { words.style.opacity = 1; words.style.transform = 'none'; }
       return t < Math.max(T.end, T.words + 1.5);
     });
   }
-  // where each hoof lands (relative to the belly line) for a given pose — used to keep feet on the ground
-  function drawHorseProbe(rig, hx, hy, poses) {
-    const { LL, BL } = rig, fRoot = { x: hx + BL * .30, y: hy - LL * .06 }, hRoot = { x: hx - BL * .31, y: hy - LL * .14 };
-    const tip = pts => pts[pts.length - 1].y + rig.wF[3] * 1.15;
-    return { FL: tip(legPoints(fRoot, rig.F, poses.FL, false)), FR: tip(legPoints(fRoot, rig.F, poses.FR, false)),
-      HL: tip(legPoints(hRoot, rig.Hd, poses.HL, true)), HR: tip(legPoints(hRoot, rig.Hd, poses.HR, true)) };
-  }
-
   window.SFFS_REVEAL = {
     play(kind, host, opts = {}) { host.__skip = false; return (kind === 'armory' ? armory : equestrian)(host, opts); }
   };

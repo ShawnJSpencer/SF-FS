@@ -16,7 +16,9 @@
 (function(){try{var g=function(k){try{return JSON.parse(localStorage.getItem('sffs-dev-'+k))}catch(e){return null}};
 var S=window.SFFS_STYLES,st=S.byId(g('style')||'floral'),c=S.resolveColor(st.id,g('theme')||st.colors[0][0]),splash=g('splash')!==false,bar=S.barColors(st.id,c[0]);
 var r=document.documentElement;r.setAttribute('data-style',st.id);r.setAttribute('data-theme',c[0]);if(splash)r.className+=' splashing';
-document.querySelector('meta[name=theme-color]').setAttribute('content',splash?bar[1]:bar[0]);}catch(e){}})();
+document.querySelector('meta[name=theme-color]').setAttribute('content',splash?bar[1]:bar[0]);
+/* dark styles: let the page paint behind the iPhone status bar (white clock/battery over our own dark color) */
+if(st.dark)document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]').setAttribute('content','black-translucent');}catch(e){}})();
 </script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/tulip-180.png">

@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,6 +26,7 @@ function applyLook() {
   root.dataset.style = st.id; root.dataset.theme = color[0];
   const v = n => getComputedStyle(root).getPropertyValue(n).trim();
   $('meta[name=theme-color]').content = v(root.classList.contains('splashing') ? '--splash' : '--bg');
+  $('meta[name=apple-mobile-web-app-status-bar-style]').content = st.dark ? 'black-translucent' : 'default';
   $('#logo').innerHTML = st.logo;
   const mb = $('#goMenu'); if (mb) mb.querySelector('svg').outerHTML = st.menu;
   flowerPH = st.ph;

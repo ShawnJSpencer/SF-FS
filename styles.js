@@ -9,6 +9,103 @@
   const noise = (freq, alpha, color = '0 0 0', oct = 2) =>
     `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='${oct}' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 ${color.split(' ')[0]} 0 0 0 0 ${color.split(' ')[1]} 0 0 0 0 ${color.split(' ')[2]} 0 0 0 ${alpha} 0'/></filter><rect width='220' height='220' filter='url(#n)'/></svg>`)}")`;
 
+  /* A .50 BMG cartridge drawn to its real measurements in millimeters (tip at the top):
+     copper-jacketed bullet with a knurled cannelure, bottleneck brass case with a faint annealing
+     tint on the neck and shoulder, rimless base with its extractor groove, a slick of gun oil and
+     a little tarnish. `p` keeps the ids unique when it's drawn inline. */
+  function cartridge(p) {
+    const sym = pts => 'M' + pts.map(([x, y]) => `${x} ${y}`).join(' L') + ' L' + pts.slice().reverse().map(([x, y]) => `${-x} ${y}`).join(' L') + 'Z';
+    const BR = `<stop offset="0" stop-color="#1c1309"/><stop offset=".1" stop-color="#5a3f16"/><stop offset=".25" stop-color="#cfa65c"/><stop offset=".31" stop-color="#f4e1a6"/><stop offset=".38" stop-color="#c49647"/><stop offset=".6" stop-color="#76551f"/><stop offset=".8" stop-color="#9b7837"/><stop offset=".92" stop-color="#47320f"/><stop offset="1" stop-color="#150e06"/>`;
+    const body = sym([[9, 59.5], [10.2, 128.6]]), shoulder = sym([[7.1, 52.4], [9, 59.6]]),
+      groove = sym([[8.6, 130.4], [8.6, 133.3]]), rim = sym([[10.2, 134.9], [10.2, 137.4], [9.8, 138]]),
+      bevel1 = sym([[10.2, 128.5], [8.6, 130.5]]), bevel2 = sym([[8.6, 133.2], [10.2, 135]]),
+      whole = sym([[7.1, 39], [7.1, 52.4], [9, 59.5], [10.2, 128.6], [8.6, 130.4], [8.6, 133.3], [10.2, 134.9], [10.2, 137.4], [9.8, 138]]),
+      bullet = 'M-.6 .5 Q0 -.15 .6 .5 C2.3 3.3 5.7 12.6 6.49 25 L6.49 39.6 L-6.49 39.6 L-6.49 25 C-5.7 12.6 -2.3 3.3 -.6 .5Z';
+    return `<defs>
+      <linearGradient id="${p}br">${BR}</linearGradient>
+      <linearGradient id="${p}cu"><stop offset="0" stop-color="#220b04"/><stop offset=".12" stop-color="#682a10"/><stop offset=".28" stop-color="#e09a70"/><stop offset=".36" stop-color="#f6c8a4"/><stop offset=".46" stop-color="#b05c2c"/><stop offset=".74" stop-color="#6a2c12"/><stop offset=".88" stop-color="#8c4626"/><stop offset="1" stop-color="#1e0a03"/></linearGradient>
+      <linearGradient id="${p}an" gradientUnits="userSpaceOnUse" x1="0" y1="39" x2="0" y2="74"><stop offset="0" stop-color="#6a4a8a" stop-opacity=".22"/><stop offset=".35" stop-color="#4a6296" stop-opacity=".15"/><stop offset=".62" stop-color="#a0603a" stop-opacity=".2"/><stop offset="1" stop-color="#a0603a" stop-opacity="0"/></linearGradient>
+      <linearGradient id="${p}sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3d0" stop-opacity=".28"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
+      <linearGradient id="${p}gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".75"/><stop offset=".7" stop-color="#000" stop-opacity=".35"/><stop offset="1" stop-color="#ffe9b0" stop-opacity=".25"/></linearGradient>
+      <linearGradient id="${p}oil" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5aa8"/><stop offset=".3" stop-color="#58d4ff"/><stop offset=".6" stop-color="#9bff7a"/><stop offset="1" stop-color="#ffd25a"/></linearGradient>
+      <pattern id="${p}kn" width=".75" height="3" patternUnits="userSpaceOnUse"><rect width=".75" height="3" fill="#3a1608"/><rect width=".32" height="3" fill="#c97f55"/></pattern>
+      <clipPath id="${p}cc"><path d="${whole}"/></clipPath><clipPath id="${p}bc"><path d="${bullet}"/></clipPath>
+      <filter id="${p}bl" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation=".45"/></filter>
+      <filter id="${p}bl2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.1"/></filter>
+      <filter id="${p}tn" filterUnits="userSpaceOnUse" x="-11" y="-1" width="22" height="140"><feTurbulence type="fractalNoise" baseFrequency="1.3" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .1  0 0 0 0 .06  0 0 0 0 .02  2.4 0 0 0 -1.25"/></filter>
+    </defs>
+    <path d="${bullet}" fill="url(#${p}cu)"/>
+    <g clip-path="url(#${p}bc)">
+      <rect x="-6.5" y="34.3" width="13" height="2.7" fill="url(#${p}kn)"/>
+      <rect x="-6.5" y="34.3" width="13" height="2.7" fill="url(#${p}cu)" opacity=".45"/>
+      <path d="M-6.5 34.3 H6.5 M-6.5 37 H6.5" stroke="#1a0802" stroke-width=".35" opacity=".7"/>
+      <path d="M-.5 2.2 C-1.6 6, -3 14, -3.15 25 L-3.15 34" stroke="#fff1e2" stroke-width=".8" fill="none" opacity=".55" filter="url(#${p}bl)"/>
+      <path d="M1.2 4 C2.6 9, 4.4 17, 4.9 25 L4.9 34" stroke="#ffd9c0" stroke-width=".4" fill="none" opacity=".2" filter="url(#${p}bl)"/>
+      <rect x="-7" y="-1" width="14" height="41" fill="#000" filter="url(#${p}tn)" opacity=".35"/>
+    </g>
+    <path d="M7.1 39 L7.1 52.5 L-7.1 52.5 L-7.1 39Z" fill="url(#${p}br)"/>
+    <path d="${shoulder}" fill="url(#${p}br)"/><path d="${shoulder}" fill="url(#${p}sh)"/>
+    <path d="${body}" fill="url(#${p}br)"/>
+    <path d="${bevel1}" fill="url(#${p}br)"/><path d="${bevel1}" fill="#000" opacity=".35"/>
+    <path d="${groove}" fill="url(#${p}br)"/><path d="${groove}" fill="url(#${p}gr)"/>
+    <path d="${bevel2}" fill="url(#${p}br)"/><path d="${bevel2}" fill="#fff0c0" opacity=".14"/>
+    <path d="${rim}" fill="url(#${p}br)"/>
+    <g clip-path="url(#${p}cc)">
+      <rect x="-11" y="38" width="22" height="40" fill="url(#${p}an)"/>
+      <path d="M-11 39.15 H11" stroke="#140c04" stroke-width=".55" opacity=".8"/><path d="M-11 39.75 H11" stroke="#fff1c4" stroke-width=".3" opacity=".35"/>
+      <rect x="-3.6" y="40" width=".9" height="12" fill="#fffbe8" opacity=".5" filter="url(#${p}bl)"/>
+      <path d="M-3.4 53 L-4.4 59.5" stroke="#fffbe8" stroke-width="1.1" opacity=".55" filter="url(#${p}bl)"/>
+      <path d="M-4.5 61 L-4.9 127" stroke="#fffbe8" stroke-width="1.2" opacity=".75" filter="url(#${p}bl)"/>
+      <path d="M5.4 62 L5.9 126" stroke="#fff3cf" stroke-width=".6" opacity=".2" filter="url(#${p}bl)"/>
+      <path d="M-11 137.45 H11" stroke="#fff1c4" stroke-width=".25" opacity=".3"/>
+      <ellipse cx="1.4" cy="93" rx="4.6" ry="17" transform="rotate(-11 1.4 93)" fill="url(#${p}oil)" opacity=".1" filter="url(#${p}bl2)"/>
+      <path d="M-1.6 79 C-.6 88, .4 98, 3.4 108" stroke="#fffdf2" stroke-width=".7" fill="none" opacity=".3" filter="url(#${p}bl)"/>
+      <ellipse cx="-3.4" cy="112" rx="3.2" ry="6" fill="#000" opacity=".16" filter="url(#${p}bl2)"/>
+      <circle cx="-4.1" cy="86" r=".4" fill="#fff" opacity=".85"/><circle cx="2.6" cy="101.5" r=".28" fill="#fff" opacity=".7"/>
+      <rect x="-11" y="38" width="22" height="101" fill="#000" filter="url(#${p}tn)" opacity=".28"/>
+    </g>
+    <path d="${whole}" fill="none" stroke="#0e0904" stroke-width=".35" opacity=".75"/>
+    <path d="${bullet}" fill="none" stroke="#120602" stroke-width=".3" opacity=".7"/>`;
+  }
+  const cartURI = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-11 -1 22 140">${cartridge('c')}</svg>`)}")`;
+
+  /* A show-ribbon rosette for the Equestrian menu: pleated outer ruffle, a second ruffle, a gold
+     ring, the center disk, and two swallow-tailed ribbons hanging in an upside-down V. Drawn with
+     each color choice's real colors (CSS variables can't reach inside a background picture). */
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, t) => '#' + hex(a).map((v, i) => Math.round(v + (hex(b)[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  function rosette(acc, acc2, card) {
+    const cx = 50, cy = 50, ring = (n, r0, r1, c1, c2, sc) => {
+      let wedges = '', edge = '';
+      for (let i = 0; i < n; i++) {
+        const a0 = i / n * 2 * Math.PI, a1 = (i + 1) / n * 2 * Math.PI, am = (a0 + a1) / 2;
+        const P = (r, a) => `${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`;
+        wedges += `<path d="M${cx} ${cy} L${P(r1 + 3, a0)} L${P(r1 + 3, am)}Z" fill="${c1}"/><path d="M${cx} ${cy} L${P(r1 + 3, am)} L${P(r1 + 3, a1)}Z" fill="${c2}"/>`;
+        edge += (i ? ' Q' : 'M' + P(r1, a0) + ' Q') + `${P(r1 + sc, am)} ${P(r1, a1)}`;
+      }
+      return { wedges, edge: edge + 'Z' };
+    };
+    const outer = ring(30, 30, 46.5, mix(acc, '#ffffff', .22), mix(acc, '#000000', .12), 2.6);
+    const inner = ring(40, 30, 37, mix(acc2, '#ffffff', .25), mix(acc2, '#000000', .1), 1.6);
+    const tail = rot => `<g transform="rotate(${rot} 50 52)"><path d="M39 52 H61 V131 L50 120 L39 131Z" fill="url(#rt)"/>
+      <path d="M41.5 52 V127.5 M58.5 52 V127.5" stroke="${mix(acc2, '#ffffff', .2)}" stroke-width="1.1" opacity=".8"/>
+      <path d="M39 70 L61 64 V74 L39 82Z" fill="#000" opacity=".12"/></g>`;
+    const body = `<defs>
+      <linearGradient id="rt"><stop offset="0" stop-color="${mix(acc, '#000000', .35)}"/><stop offset=".22" stop-color="${acc}"/><stop offset=".45" stop-color="${mix(acc, '#ffffff', .28)}"/><stop offset=".7" stop-color="${acc}"/><stop offset="1" stop-color="${mix(acc, '#000000', .4)}"/></linearGradient>
+      <radialGradient id="rs"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset=".86" stop-color="#000" stop-opacity=".22"/><stop offset="1" stop-color="#000" stop-opacity=".05"/></radialGradient>
+      <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6e2a0"/><stop offset=".5" stop-color="#b8892f"/><stop offset="1" stop-color="#f1d58a"/></linearGradient>
+      <radialGradient id="rc" cx="45%" cy="40%"><stop offset=".7" stop-color="${card}"/><stop offset="1" stop-color="${mix(card, '#000000', .12)}"/></radialGradient>
+      <clipPath id="ro"><path d="${outer.edge}"/></clipPath><clipPath id="ri"><path d="${inner.edge}"/></clipPath></defs>
+      ${tail(17)}${tail(-17)}
+      <g clip-path="url(#ro)">${outer.wedges}<circle cx="50" cy="50" r="50" fill="url(#rs)"/></g>
+      <path d="${outer.edge}" fill="none" stroke="${mix(acc, '#000000', .35)}" stroke-width=".6" opacity=".6"/>
+      <g clip-path="url(#ri)">${inner.wedges}<circle cx="50" cy="50" r="38" fill="url(#rs)"/></g>
+      <circle cx="50" cy="50" r="31" fill="none" stroke="url(#rg)" stroke-width="2.6"/>
+      <circle cx="50" cy="50" r="29.6" fill="url(#rc)"/>
+      <circle cx="50" cy="50" r="27.6" fill="none" stroke="${mix(acc, card, .5)}" stroke-width=".6" stroke-dasharray="1.4 1.2"/>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 135">${body}</svg>`)}")`;
+  }
+
   /* ── Art (logo · no-photo picture · menu button · big opening art) ── */
   const ART = {
     tulips: svg('0 0 64 64', `<circle cx="32" cy="32" r="31" style="fill:var(--soft)"/>
@@ -30,11 +127,7 @@
       <circle cx="32" cy="32" r="9.5" fill="url(#hsP)" stroke="#1a1208" stroke-width="1.6"/>
       <circle cx="32" cy="32" r="6.6" fill="none" stroke="#1a1208" stroke-opacity=".45" stroke-width="1"/>
       <circle cx="33" cy="31" r="2.3" fill="#1a1208" opacity=".55"/><circle cx="32.4" cy="30.4" r="1" fill="#fff" opacity=".25"/>`),
-    bullet50: svg('0 0 32 32', `<defs><linearGradient id="b5c" x1="0" x2="1"><stop offset="0" stop-color="#3a2a10"/><stop offset=".35" stop-color="#d8b36a"/><stop offset=".6" stop-color="#9a7434"/><stop offset="1" stop-color="#2a1d08"/></linearGradient>
-      <linearGradient id="b5t" x1="0" x2="1"><stop offset="0" stop-color="#3b1a0b"/><stop offset=".4" stop-color="#c9784a"/><stop offset="1" stop-color="#2d1206"/></linearGradient></defs>
-      <g transform="rotate(35 16 16)"><path d="M13.6 2.2 C 14.6 5, 15 7, 15.2 9 L16.8 9 C17 7,17.4 5,18.4 2.2 C 17.4 .6,14.6 .6,13.6 2.2Z" fill="url(#b5t)" transform="translate(0 -.4)"/>
-      <path d="M15 9 L17 9 L17.4 11 L18.8 13 L18.8 27.5 L13.2 27.5 L13.2 13 L14.6 11Z" fill="url(#b5c)" stroke="#1a1208" stroke-width=".5"/>
-      <rect x="12.8" y="27.4" width="6.4" height="1.6" rx=".4" fill="#6e5222" stroke="#1a1208" stroke-width=".5"/></g>`),
+    bullet50: svg('0 0 32 32', `<g stroke="none" transform="translate(16.5 15.5) rotate(38) scale(.22) translate(0 -69)">${cartridge('m')}</g>`),
     // Equestrian
     horseHead: svg('0 0 64 64', `<circle cx="32" cy="32" r="31" style="fill:var(--soft)"/>
       <path d="M22 56 L23.5 41 C 19 36, 17.5 28, 21 21 C 24 14, 30 9.5, 35.5 8.5 L37 3.5 L40 8.5 C 45 10, 50.5 16, 54 24.5 C 55.5 28.5, 54 32, 50.5 32.5 C 46.8 33, 43.5 31.2, 41 29 C 38.5 33, 37 38, 37.6 44 L39.5 56 Z" style="fill:var(--ink)"/>
@@ -195,23 +288,23 @@
       css += `[data-style="${st.id}"][data-theme="${cid}"]{${Object.entries(tok).map(([k, v]) => `--${k}:${v}`).join(';')}}\n`;
     }
   }
+  // Equestrian rosettes, in each color choice's colors
+  for (const [cid, , tok] of byId('equestrian').colors) css += `[data-style="equestrian"][data-theme="${cid}"] .petal{background-image:${rosette(tok.accent, tok.accent2, tok.card)}}\n`;
   // menu petals, per style
   css += `
-[data-style="armory"] .petal{width:46px;height:132px;margin:-66px 0 0 -23px;border:0;box-shadow:none;background:none;border-radius:0}
-[data-style="armory"] .petal::before{content:"";position:absolute;left:13px;right:13px;top:0;height:40px;border-radius:50% 50% 8% 8% / 92% 92% 8% 8%;
-  background:linear-gradient(90deg,#2d1206,#7a3a1a 30%,#d08a58 45%,#8a4520 62%,#2d1206)}
-[data-style="armory"] .petal::after{content:"";position:absolute;left:4px;right:4px;top:38px;bottom:0;border-radius:3px 3px 2px 2px;
-  clip-path:polygon(28% 0,72% 0,80% 9%,100% 18%,100% 100%,0 100%,0 18%,20% 9%);
-  background:linear-gradient(90deg,#2a1d08,#7d5a24 18%,#e3c27a 38%,#a07a36 60%,#3d2b0f 88%,#22180a),linear-gradient(#0000 92%,#0006 92% 95%,#0000 95%);
-  box-shadow:0 10px 24px -8px #000}
-[data-style="armory"] .petal .pc{position:relative;z-index:1;margin-top:58px;background:rgba(15,15,16,.78);border:1px solid rgba(201,163,90,.5);border-radius:6px;padding:4px 6px}
+[data-style="armory"] .bloom{--bloom-extra:62}
+[data-style="equestrian"] .bloom{--bloom-extra:16}
+[data-style="armory"] .petal{width:76px;height:196px;margin:-98px 0 0 -38px;padding:0;border:0;box-shadow:none;background:none;border-radius:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+[data-style="armory"] .petal::before{content:"";position:absolute;left:50%;top:0;width:24px;height:153px;margin-left:-12px;background:${cartURI} center/contain no-repeat;
+  filter:drop-shadow(2px 7px 5px rgba(0,0,0,.65)) drop-shadow(0 0 1px rgba(0,0,0,.8))}
+[data-style="armory"] .petal .pc{position:relative;z-index:1;margin-top:158px;background:linear-gradient(#26282b,#141516);border:1px solid rgba(201,163,90,.45);border-radius:4px;padding:3px 7px 4px;box-shadow:0 6px 12px -6px #000,inset 0 1px 0 rgba(255,255,255,.08)}
 [data-style="armory"] .petal svg{stroke:#e6dfd3;width:20px;height:20px}
 [data-style="armory"] .petal b{color:#e6dfd3;letter-spacing:.06em;text-transform:uppercase;font-size:11px}
-[data-style="equestrian"] .petal{width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;border:0;
-  background:radial-gradient(circle,var(--card) 0 52%,transparent 53%),repeating-conic-gradient(var(--accent) 0 7deg,color-mix(in srgb,var(--accent) 70%,#fff) 7deg 14deg);
-  box-shadow:0 10px 22px -12px var(--ink)}
-[data-style="equestrian"] .petal::after{content:"";position:absolute;left:50%;top:76%;width:44px;height:44px;margin-left:-22px;z-index:-1;
-  background:linear-gradient(105deg,transparent 30%,var(--accent) 30% 48%,transparent 48% 52%,var(--accent) 52% 70%,transparent 70%);clip-path:polygon(0 0,100% 0,100% 100%,82% 86%,64% 100%,36% 100%,18% 86%,0 100%)}
+[data-style="equestrian"] .petal{width:92px;height:124px;margin:-46px 0 0 -46px;transform-origin:46px 46px;padding:0;border:0;border-radius:0;box-shadow:none;
+  background:center top/100% auto no-repeat;filter:drop-shadow(0 6px 7px rgba(40,25,10,.28));display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+[data-style="equestrian"] .petal .pc{margin-top:24px;gap:1px}
+[data-style="equestrian"] .petal svg{width:22px;height:22px}
+[data-style="equestrian"] .petal b{font-size:10.5px}
 [data-style="chalk"] .petal{background:color-mix(in srgb,var(--bg) 80%,transparent);border:2px dashed color-mix(in srgb,var(--ink) 70%,transparent);box-shadow:none}
 [data-style="retro"] .petal{border-radius:999px;width:84px;height:84px;margin:-42px 0 0 -42px;border:3px solid var(--card);
   background:radial-gradient(circle at 30% 30%,#fff6 0 10%,transparent 11%),var(--accent);box-shadow:0 0 0 2px var(--accent),0 10px 22px -12px var(--ink)}

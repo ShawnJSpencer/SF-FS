@@ -27,7 +27,8 @@ const menuBtn = $('#goMenu');
 function openBloom() {
   const r = menuBtn.getBoundingClientRect();
   const cx = r.left + r.width / 2, cy = r.top + 16;
-  const R = Math.min(170, Math.max(150, innerWidth * .41));   // far enough out that petals don't overlap
+  const R = Math.min(170, Math.max(150, innerWidth * .41))   // far enough out that petals don't overlap
+    + (parseFloat(getComputedStyle(bloom).getPropertyValue('--bloom-extra')) || 0);   // long petals (Armory) sit farther out
   // fan from straight left (180°) to straight up (90°); if the button isn't at the right edge, fan wider
   const right = innerWidth - cx < 120;
   const from = right ? 180 : 165, to = right ? 90 : 15;
