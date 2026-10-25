@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '1.8.0';
+const VERSION = '1.8.1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -130,6 +130,16 @@ const flowerPH = `<svg viewBox="0 0 24 24" fill="currentColor"><g opacity=".9">$
 // Which picture to show: the package of the batch that expires first (its kind's photo),
 // otherwise the item's main photo.
 // "ReadyWise 124 serv" → 124
+// What one "count" means for an item (box, can, bag…). Shown on the item card only.
+const UNITS = [
+  ['bag', 'bags'], ['bar', 'bars'], ['bottle', 'bottles'], ['box', 'boxes'], ['bucket', 'buckets'], ['bundle', 'bundles'],
+  ['can', 'cans'], ['#10 can', '#10 cans'], ['canister', 'canisters'], ['carton', 'cartons'], ['case', 'cases'],
+  ['case pack', 'case packs'], ['container', 'containers'], ['cup', 'cups'], ['gallon', 'gallons'], ['jar', 'jars'],
+  ['jug', 'jugs'], ['loaf', 'loaves'], ['pack', 'packs'], ['package', 'packages'], ['packet', 'packets'], ['piece', 'pieces'],
+  ['pouch', 'pouches'], ['roll', 'rolls'], ['sack', 'sacks'], ['sleeve', 'sleeves'], ['spray can', 'spray cans'],
+  ['stick', 'sticks'], ['tube', 'tubes'], ['tub', 'tubs'], ['tray', 'trays'], ['barrel', 'barrels'], ['pound', 'pounds'], ['each', 'each']
+];
+const unitWord = (u, n) => { const e = UNITS.find(x => x[0] === u); return e ? (n === 1 ? e[0] : e[1]) : ''; };
 const servingsGuess = it => { const m = /(\d+)\s*serv/i.exec(it.name || ''); return m ? +m[1] : null; };
 const kindName = (it, code) => code ? ((it.kinds || {})[code]?.name || '') : '';
 // Which kind a batch is. A batch nobody tagged counts as the item's only kind, when it has just one.
@@ -433,7 +443,10 @@ document.addEventListener('click', e => {
   if (c) jumpToCat(c.dataset.cat);
   if (e.target.id === 'addFromSearch') openItem(null, { name: query });
 });
-$('#q').addEventListener('input', e => { query = e.target.value; render(); });
+$('#q').addEventListener('input', e => { query = e.target.value; $('#qx').hidden = !query; render(); });
+$('#qx').addEventListener('click', e => {
+  e.preventDefault(); const q = $('#q'); q.value = ''; query = ''; $('#qx').hidden = true; q.blur(); render();
+});
 
 // The list scrolls inside #scroller. Never use scrollIntoView here: on iPhone it can
 // move the whole page and fight the finger (the old rubber-band bug).
@@ -582,10 +595,11 @@ function openItem(id, preset = {}) {
         ${kindsOf(d).length ? `<select data-lkind="${i}" style="border:0;background:none;color:var(--accent);font-size:13px;font-weight:700;padding:0;max-width:190px;-webkit-appearance:none;appearance:none">
           <option value="">which kind? ▾</option>${kindsOf(d).map((k, j) => `<option value="${esc(k.code)}" ${k.code === l.code ? 'selected' : ''}>${esc(k.name || 'Kind ' + (j + 1))} ▾</option>`).join('')}</select>` : ''}
         <select data-lstore="${i}" class="lotsel" style="color:${l.store ? 'var(--leaf)' : 'var(--muted)'}"><option value="">which store? ▾</option>${Object.entries(STORES).map(([k, st]) => `<option value="${k}" ${k === l.store ? 'selected' : ''}>from ${esc(st.name)} ▾</option>`).join('')}</select></span>
-        <span class="step"><button data-m="${i}">−</button><b>${l.qty}</b><button data-p="${i}">+</button></span></div>`; }).join('')
+        <span class="lotq"><span class="step"><button data-m="${i}">−</button><b>${l.qty}</b><button data-p="${i}">+</button></span>
+          <select class="unitsel ${d.unit ? 'set' : ''}" data-unit aria-label="Unit"><option value="">unit? ▾</option>${UNITS.map(([u]) => `<option value="${esc(u)}" ${u === d.unit ? 'selected' : ''}>${esc(unitWord(u, l.qty))} ▾</option>`).join('')}</select></span></div>`; }).join('')
       : `<p class="note">None on the shelf right now.</p>`;
     const q = lots.reduce((a, l) => a + (+l.qty || 0), 0);
-    $('#fSum', body).textContent = `${q} on hand · keep ${d.par ?? 1}` + (d.loc ? ` · shelf ${d.loc}` : '');
+    $('#fSum', body).textContent = `${q} ${d.unit ? unitWord(d.unit, q) + ' ' : ''}on hand · keep ${d.par ?? 1}` + (d.loc ? ` · shelf ${d.loc}` : '');
     drawHero();
   };
   drawLots();
@@ -605,6 +619,7 @@ function openItem(id, preset = {}) {
       when.querySelector('small').textContent = l.exp ? (fmtLeft(l.exp) || 'expires ' + fmtExp(l.exp)) : 'no date — tap to set';
     }
     const j = e.target.dataset.lkind; if (j != null) { if (e.target.value) d.lots[j].code = e.target.value; else delete d.lots[j].code; drawLots(); }
+    if (e.target.hasAttribute('data-unit')) { if (e.target.value) d.unit = e.target.value; else delete d.unit; drawLots(); }
     const q = e.target.dataset.lstore; if (q != null) { if (e.target.value) d.lots[q].store = e.target.value; else delete d.lots[q].store; drawLots(); }
   });
   wireShelves($('#fShelves', body), () => d.loc, v => { d.loc = v; drawLots(); });

@@ -63,6 +63,12 @@ main{max-width:760px;margin:0 auto;padding:0 18px}
 .search{display:flex;align-items:center;gap:8px;border-bottom:1.5px solid var(--soft);margin:10px 0 6px;padding:6px 2px}
 .search input{flex:1;border:0;background:none;outline:none;font-size:16px}
 .search input::placeholder{color:var(--muted)}
+.search input::-webkit-search-cancel-button{display:none;-webkit-appearance:none}
+.qx{width:26px;height:26px;border-radius:50%;background:var(--soft);color:var(--ink);font-size:12px;font-weight:800;display:grid;place-items:center;flex:none}
+/* unit under each batch's counter on the item card */
+.lotq{display:flex;flex-direction:column;align-items:center;gap:2px}
+.unitsel{border:0;background:none;color:var(--muted);font-size:12.5px;font-weight:700;padding:0;text-align:center;text-align-last:center;-webkit-appearance:none;appearance:none;max-width:120px}
+.unitsel.set{color:var(--ink)}
 
 /* ── Use-soon ribbon ── */
 .soon{margin:14px 0 4px}
@@ -463,6 +469,7 @@ html.splashing,html.splashing body{background:var(--splash)}
   <label class="search">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--muted)"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
     <input id="q" type="search" placeholder="Find something…" autocomplete="off">
+    <button type="button" class="qx" id="qx" aria-label="Clear search" hidden>✕</button>
   </label>
   <div id="soon" class="soon hidden"></div>
   <nav class="cats" id="cats"></nav>
