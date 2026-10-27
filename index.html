@@ -125,6 +125,14 @@ section.cat h2 small{font:600 12px var(--fb);color:var(--muted);letter-spacing:.
 .dock{position:relative;flex:none;width:100%;z-index:20;padding:8px 26px calc(12px + env(safe-area-inset-bottom));
   display:flex;align-items:flex-end;justify-content:space-between;max-width:760px;margin:0 auto;
 }
+/* floating "Top" button */
+.totop{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:110px;z-index:25;display:flex;align-items:center;gap:5px;padding:9px 15px 9px 11px;border-radius:999px;
+  background:var(--accent);color:var(--card);font:800 14px var(--fb);letter-spacing:.02em;box-shadow:0 8px 20px -8px rgba(0,0,0,.45);
+  opacity:0;transform:translateY(14px) scale(.9);pointer-events:none;transition:opacity .2s,transform .25s cubic-bezier(.3,1.4,.5,1)}
+.totop.show{opacity:1;transform:none;pointer-events:auto}
+.totop svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.totop:active{transform:scale(.94)}
+.meta .hit{color:var(--accent);font-weight:700}
 .dock::before{content:"";position:absolute;left:0;right:0;top:-26px;height:26px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
 .dock .ic{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);font-weight:700;width:54px}
 .dock .ic svg{width:28px;height:28px;stroke:var(--ink);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
@@ -524,6 +532,7 @@ html.splashing,html.splashing body{background:var(--splash)}
   <div id="list"></div>
 </main>
 </div>
+<button type="button" class="totop" id="toTop" aria-label="Back to the top"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 11.5 12 5.5l6 6"/></svg>Top</button>
 
 <nav class="dock">
   <button class="ic" id="goShop" aria-label="Shopping list">

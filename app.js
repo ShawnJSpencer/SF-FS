@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -178,6 +178,14 @@ const UNITS = [
 const unitWord = (u, n) => { const e = UNITS.find(x => x[0] === u); return e ? (n === 1 ? e[0] : e[1]) : ''; };
 const servingsGuess = it => { const m = /(\d+)\s*serv/i.exec(it.name || ''); return m ? +m[1] : null; };
 const kindName = (it, code) => code ? ((it.kinds || {})[code]?.name || '') : '';
+// Search: every word typed must show up somewhere — the item's name, its brand, any of its kinds
+// (e.g. "Belvita Blueberry"), its spot or its notes. Case, accents and punctuation don't matter.
+const fold = t => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, ' and ').replace(/['’.]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const searchText = it => fold([it.name, it.brand, it.loc, it.notes, ...kindsOf(it).flatMap(k => [k.name, k.brand])].filter(Boolean).join(' '));
+const matches = (it, q) => { const w = fold(q).split(' ').filter(Boolean); if (!w.length) return true; const h = searchText(it); return w.every(x => h.includes(x)); };
+// when a search hits a kind or the brand rather than the name, say which
+const matchHint = (it, q) => { const w = fold(q).split(' ').filter(Boolean); if (!w.length || w.every(x => fold(it.name).includes(x))) return '';
+  const k = kindsOf(it).find(k => k.name && w.some(x => fold(k.name + ' ' + (k.brand || '')).includes(x))); return k ? k.name : ''; };
 // Which kind a batch is. A batch nobody tagged counts as the item's only kind, when it has just one.
 function effCode(it, lot) {
   if (lot?.code) return lot.code;
@@ -450,7 +458,7 @@ function render() {
   $('#cats').innerHTML = catGroups().map(g => g.map(c => `<button data-cat="${c.id}" class="${c.id === activeCat ? 'on' : ''}">${esc(c.name)}</button>`).join('')).join('<span class="sep" aria-hidden="true">•</span>');
   // sections
   const byCat = new Map(cats.map(c => [c.id, []]));
-  items.forEach(it => { if (!q || (it.name + ' ' + (it.loc || '') + ' ' + (it.brand || '')).toLowerCase().includes(q)) (byCat.get(it.cat) || byCat.set(it.cat, []).get(it.cat)).push(it); });
+  items.forEach(it => { if (!q || matches(it, q)) (byCat.get(it.cat) || byCat.set(it.cat, []).get(it.cat)).push(it); });
   const html = cats.map(c => {
     const list = (byCat.get(c.id) || []).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));   // A–Z
     if (!list.length) return q ? '' : `<section class="cat" id="cat-${c.id}"><h2>${esc(c.name)}</h2><p class="note">Nothing here yet.</p></section>`;
@@ -470,7 +478,7 @@ function row(it) {
   const q = qtyOf(it), s = soonest(it), n = s ? daysLeft(s.exp) : Infinity;
   const cls = q === 0 ? 'out' : q < (it.par ?? 1) ? 'low' : '';
   return `<button class="item ${cls}" data-open="${it.id}">${pic(it)}
-    <span><div class="nm">${esc(it.name)}</div><div class="meta">${it.loc ? `<span class="loc">${esc(it.loc)}</span>` : ''}${(it.codes || []).length > 1 ? `<span>${it.codes.length} kinds</span>` : ''}${it.brand ? `<span>${esc(it.brand)}</span>` : ''}</div></span>
+    <span><div class="nm">${esc(it.name)}</div><div class="meta">${query.trim() && matchHint(it, query) ? `<span class="hit">${esc(matchHint(it, query))}</span>` : ''}${it.loc ? `<span class="loc">${esc(it.loc)}</span>` : ''}${(it.codes || []).length > 1 ? `<span>${it.codes.length} kinds</span>` : ''}${it.brand ? `<span>${esc(it.brand)}</span>` : ''}</div></span>
     <span class="q"><div class="n">${q}<span class="par"> / ${it.par ?? 1}</span></div><div class="e ${n <= SOON ? 'soon' : ''}">${s ? (n < 0 ? 'expired' : 'exp ' + fmtExp(s.exp)) : ''}</div></span></button>`;
 }
 document.addEventListener('click', e => {
@@ -510,6 +518,12 @@ function jumpToCat(id) {
   scroller.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 }
 // keep the category word under-lined as you scroll
+// a floating "Top" button once you're a ways down (tapping the iPhone clock doesn't scroll a web app's list)
+const toTop = $('#toTop');
+const placeTop = () => { toTop.style.bottom = ($('.dock').offsetHeight + 14) + 'px'; };
+placeTop(); addEventListener('resize', placeTop);
+toTop.onclick = () => { scroller.scrollTo({ top: 0, behavior: 'smooth' }); toTop.classList.remove('show'); };
+scroller.addEventListener('scroll', () => { toTop.classList.toggle('show', scroller.scrollTop > Math.max(500, scroller.clientHeight * .8)); }, { passive: true });
 scroller.addEventListener('scroll', () => {
   if (Date.now() - jumping < 900) return;   // let a tapped jump finish first
   if (wide()) return;                         // cards sit side by side, so there's no single "current" one
@@ -871,7 +885,7 @@ function openUsePicker() {
   const letterOf = n => { const c = (n.trim()[0] || '#').toUpperCase(); return /[A-Z]/.test(c) ? c : '#'; };
   const draw = () => {
     const q = $('#upQ', body).value.toLowerCase();
-    const list = [...DB.items.values()].filter(i => qtyOf(i) > 0 && (!q || i.name.toLowerCase().includes(q)))
+    const list = [...DB.items.values()].filter(i => qtyOf(i) > 0 && (!q || matches(i, q)))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
     const groups = new Map();
     list.forEach(i => { const L = letterOf(i.name); (groups.get(L) || groups.set(L, []).get(L)).push(i); });
@@ -1094,7 +1108,7 @@ function openNew(code, p) {
     <label class="field"><span>Search our items</span><input id="nwQ" type="search" autocomplete="off"></label><div class="sugg" id="nwList"></div>
     <div class="acts"><button class="link mute" id="nwCancel">cancel</button><button class="link big flourish" id="nwNew">Add as a new item</button></div>`);
   $('#nwQ', body).oninput = e => { const q = e.target.value.toLowerCase();
-    $('#nwList', body).innerHTML = q ? all.filter(i => i.name.toLowerCase().includes(q)).slice(0, 12).map(i => `<button data-link="${i.id}">${esc(i.name)} <small>· ${esc(DB.meta.cats.find(c => c.id === i.cat)?.name || '')}</small></button>`).join('') : ''; };
+    $('#nwList', body).innerHTML = q ? all.filter(i => matches(i, q)).slice(0, 12).map(i => `<button data-link="${i.id}">${esc(i.name)} <small>· ${esc(DB.meta.cats.find(c => c.id === i.cat)?.name || '')}</small></button>`).join('') : ''; };
   body.addEventListener('click', async e => { const b = e.target.closest('[data-link]'); if (!b) return;
     const out = await DB.mutate(b.dataset.link, x => { addKind(x, code, p || { name: '' }); if (!x.img && p?.img) x.img = p.img; if (!x.brand && p?.brand) x.brand = p.brand; });
     toast(`Now counts as ${out.name} ✿`); openFound(out.id, code); });
