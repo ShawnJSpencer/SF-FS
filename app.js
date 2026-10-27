@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1262,6 +1262,8 @@ function openSettings() {
     <div class="acts" style="justify-content:flex-start;gap:24px;margin-top:8px"><button class="link flourish" id="shAdd">add a shelf</button><button class="link mute" id="shDel">remove last</button></div>
 
     <div class="setsec">Categories</div>
+    <p class="note">Tap a name to rename it. Removing a category moves its items to another one first.</p>
+    <div id="stCats"></div>
     <div class="cols" style="align-items:end"><label class="field"><span>New category</span><input id="stCat"></label><button class="link" id="stCatGo" style="margin-bottom:18px">add</button></div>
 
     <div class="setsec">Backup</div>
@@ -1302,8 +1304,44 @@ function openSettings() {
   $('#stFam', body).onchange = e => DB.saveMeta({ familySize: Math.max(1, +e.target.value || 4) });
   $('#stHour', body).onchange = e => DB.saveMeta({ reportHour: +e.target.value });
   $('#stCatGo', body).onclick = async () => { const n = $('#stCat', body).value.trim(); if (!n) return;
-    const id = n.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (DB.meta.cats.some(c => c.id === id)) return toast('Already have that one');
-    await DB.saveMeta({ cats: [...DB.meta.cats, { id, name: n }] }); $('#stCat', body).value = ''; toast('Category added ✿'); };
+    if (DB.meta.cats.some(c => c.name.toLowerCase() === n.toLowerCase())) return toast('Already have that one');
+    let id = n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cat'; while (DB.meta.cats.some(c => c.id === id)) id += '-2';
+    await DB.saveMeta({ cats: [...DB.meta.cats, { id, name: n }] }); $('#stCat', body).value = ''; drawCats(); toast('Category added ✿'); };
+  // rename in place (the category keeps its id, so its items stay with it); remove after moving its items
+  const catCount = id => [...DB.items.values()].filter(i => i.cat === id).length;
+  function drawCats(opening) {
+    $('#stCats', body).innerHTML = orderedCats().map(c => { const n = catCount(c.id), others = orderedCats().filter(o => o.id !== c.id);
+      return `<div class="catrow" data-cid="${c.id}">
+        <input class="catname" value="${esc(c.name)}" aria-label="Category name" enterkeyhint="done" autocomplete="off">
+        <small>${n} item${n === 1 ? '' : 's'}</small>
+        <button class="catdel" data-catdel="${c.id}" aria-label="Remove ${esc(c.name)}"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg></button>
+        ${opening === c.id ? `<div class="catmove">${n ? `Move its ${n} item${n === 1 ? '' : 's'} to <select data-catto>${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>` : 'Remove this empty category?'}
+          <span class="acts2"><button class="link mute" data-catno>keep it</button><button class="link warn" data-catyes="${c.id}">${n ? 'move & remove' : 'remove'}</button></span></div>` : ''}
+      </div>`; }).join('');
+  }
+  drawCats();
+  $('#stCats', body).addEventListener('change', async e => {
+    const inp = e.target.closest('.catname'); if (!inp) return;
+    const id = inp.closest('[data-cid]').dataset.cid, name = inp.value.trim(), cur = DB.meta.cats.find(c => c.id === id);
+    if (!name) { inp.value = cur.name; return; }
+    if (name === cur.name) return;
+    if (DB.meta.cats.some(c => c.id !== id && c.name.toLowerCase() === name.toLowerCase())) { inp.value = cur.name; return toast('Already have one called that'); }
+    await DB.saveMeta({ cats: DB.meta.cats.map(c => c.id === id ? { ...c, name } : c) }); drawCats(); toast('Renamed ✿');
+  });
+  $('#stCats', body).addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest('.catname')) e.target.blur(); });
+  $('#stCats', body).addEventListener('click', async e => {
+    const del = e.target.closest('[data-catdel]');
+    if (del) { if (DB.meta.cats.length < 2) return toast('Keep at least one category'); return drawCats(del.dataset.catdel); }
+    if (e.target.closest('[data-catno]')) return drawCats();
+    const yes = e.target.closest('[data-catyes]'); if (!yes) return;
+    const id = yes.dataset.catyes, to = $('[data-catto]', body)?.value, name = DB.meta.cats.find(c => c.id === id)?.name;
+    const moving = [...DB.items.values()].filter(i => i.cat === id);
+    if (moving.length && !to) return;
+    for (const it of moving) await DB.saveItem({ ...clone(it), cat: to });
+    await DB.saveMeta({ cats: DB.meta.cats.filter(c => c.id !== id) });
+    if (activeCat === id) activeCat = null;
+    drawCats(); toast(moving.length ? `${name} removed · items moved to ${DB.meta.cats.find(c => c.id === to)?.name}` : `${name} removed`);
+  });
   $('#stExport', body).onclick = () => { const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify({ meta: DB.meta, items: [...DB.items.values()] }, null, 1)], { type: 'application/json' }));
     a.download = `food-storage-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };

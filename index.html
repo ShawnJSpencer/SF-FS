@@ -361,6 +361,18 @@ section.cat h2 small{font:600 12px var(--fb);color:var(--muted);letter-spacing:.
 .note{font-size:13px;color:var(--muted)}
 .toggle{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed var(--soft)}
 .toggle input{width:20px;height:20px;accent-color:var(--accent)}
+/* categories in Settings: rename in place, remove (moving its items first) */
+.catrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:4px 0;border-bottom:1px dashed var(--soft)}
+.catrow .catname{font:var(--fi) 600 18px var(--fd);color:var(--ink);background:transparent;border:0;border-bottom:1.5px solid transparent;border-radius:0;padding:8px 2px;min-width:0;width:100%}
+.catrow .catname:focus{outline:none;border-bottom-color:var(--accent)}
+.catrow small{color:var(--muted);font-size:12px;font-weight:700;white-space:nowrap}
+.catdel{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;color:var(--muted)}
+.catdel svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.catdel:active{color:var(--warn)}
+.catmove{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:4px 2px 12px;font-size:14px;color:var(--ink)}
+.catmove select{font:inherit;font-weight:700;padding:6px 10px;border-radius:10px;border:1.5px solid var(--accent2);background:var(--card);color:var(--ink)}
+.catmove .acts2{display:flex;gap:18px;margin-left:auto}
+.link.warn{color:var(--warn);font-weight:800}
 .bigcode svg{width:100%;height:110px;fill:var(--ink)}
 
 /* shopping list */
