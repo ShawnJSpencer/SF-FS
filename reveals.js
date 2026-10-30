@@ -1,5 +1,5 @@
 /* SF-FS · Secret reveals
-   Armory (hold one finger on the opening animation) and Equestrian (hold two).
+   Armory (hold one finger on the opening animation), Equestrian (hold two) and Gymnastics (hold three).
    Everything is drawn in code on stacked canvases inside the opening screen:
      window.SFFS_REVEAL.play('armory' | 'equestrian', hostElement, { launch })
    launch = this device already uses that style, so play a shorter version of the scene
@@ -815,7 +815,174 @@
       return t < Math.max(T.end, T.words + 1.5);
     });
   }
+  /* ═════════════════════════ GYMNASTICS ═════════════════════════
+     The flowers go dark, the gym's big lights clunk on one by one, and a gymnast on the spring floor
+     presents, does a back walkover and slides down into the splits with a salute. The gym is drawn
+     soft-focus behind her; chalk dust drifts through the window light. */
+  function drawGymBG(x, W, H, yW, r) {
+    const f = H / 900;
+    // back wall and the steel roof trusses
+    let g = x.createLinearGradient(0, 0, 0, yW); g.addColorStop(0, '#cfd6de'); g.addColorStop(.55, '#e7eaee'); g.addColorStop(1, '#dde1e6');
+    x.fillStyle = g; x.fillRect(0, 0, W, yW);
+    x.fillStyle = '#56616e'; x.fillRect(0, 0, W, H * .045);
+    x.strokeStyle = '#6c7783'; x.lineWidth = 3 * f;
+    x.beginPath(); for (let px = -40; px < W + 80; px += 80 * f) { x.moveTo(px, H * .045); x.lineTo(px + 40 * f, 0); x.lineTo(px + 80 * f, H * .045); } x.stroke();
+    // painted block wall
+    x.strokeStyle = 'rgba(120,130,140,.12)'; x.lineWidth = 1;
+    for (let y = H * .05, row = 0; y < yW; y += 22 * f, row++) { x.beginPath(); x.moveTo(0, y); x.lineTo(W, y); x.stroke();
+      for (let px = (row % 2) * 24 * f; px < W; px += 48 * f) { x.beginPath(); x.moveTo(px, y); x.lineTo(px, y + 22 * f); x.stroke(); } }
+    // tall windows full of daylight
+    const nWin = Math.max(3, Math.round(W / (300 * f)));
+    for (let i = 0; i < nWin; i++) {
+      const ww = W / nWin * .62, wx = W / nWin * (i + .19), wy = H * .09, wh = H * .2;
+      g = x.createLinearGradient(0, wy, 0, wy + wh); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#d4ecfa');
+      x.fillStyle = '#9aa4ae'; x.fillRect(wx - 5 * f, wy - 5 * f, ww + 10 * f, wh + 10 * f);
+      x.fillStyle = g; x.fillRect(wx, wy, ww, wh);
+      x.fillStyle = '#9aa4ae'; for (let k = 1; k < 4; k++) x.fillRect(wx + ww * k / 4 - 2 * f, wy, 4 * f, wh); x.fillRect(wx, wy + wh * .5 - 2 * f, ww, 4 * f);
+    }
+    // blue wall padding along the bottom of the wall
+    x.fillStyle = '#2f64a3'; x.fillRect(0, yW - H * .075, W, H * .075);
+    x.fillStyle = 'rgba(255,255,255,.12)'; for (let px = 0; px < W; px += 90 * f) x.fillRect(px, yW - H * .075, 2 * f, H * .075);
+    // banners hanging from the trusses
+    const ban = [['#7cc3ef', '#ffffff'], ['#ffffff', '#4aa3df'], ['#c9a24d', '#ffffff'], ['#4aa3df', '#ffffff'], ['#ffffff', '#7cc3ef']];
+    const nb = Math.max(3, Math.round(W / (240 * f)));
+    for (let i = 0; i < nb; i++) {
+      const bx = W * (i + .5) / nb, bw = 46 * f, bh = H * .17, [c1, c2] = ban[i % ban.length];
+      x.fillStyle = c1; x.beginPath(); x.moveTo(bx - bw / 2, H * .045); x.lineTo(bx + bw / 2, H * .045); x.lineTo(bx + bw / 2, H * .045 + bh); x.lineTo(bx, H * .045 + bh - 14 * f); x.lineTo(bx - bw / 2, H * .045 + bh); x.closePath(); x.fill();
+      x.fillStyle = c2; x.beginPath(); for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * TAU * 2 / 5, rr = 9 * f; x.lineTo(bx + Math.cos(a) * rr, H * .045 + bh * .42 + Math.sin(a) * rr); } x.closePath(); x.fill();
+      x.fillRect(bx - bw / 2, H * .045 + bh * .12, bw, 3 * f);
+    }
+    // the apparatus, out of focus: uneven bars on the left, a balance beam on the right, stacked mats
+    const fl = yW + H * .035;
+    x.strokeStyle = '#c3c9cf'; x.lineWidth = 6 * f; x.lineCap = 'round';
+    const ub = W * .08;
+    for (const [px, top] of [[ub, H * .22], [ub + 70 * f, H * .22], [ub + 150 * f, H * .3], [ub + 220 * f, H * .3]]) { x.beginPath(); x.moveTo(px, fl); x.lineTo(px, top); x.stroke(); }
+    x.strokeStyle = '#d9b98a'; x.lineWidth = 7 * f;
+    x.beginPath(); x.moveTo(ub - 8 * f, H * .23); x.lineTo(ub + 78 * f, H * .23); x.moveTo(ub + 142 * f, H * .31); x.lineTo(ub + 228 * f, H * .31); x.stroke();
+    x.strokeStyle = 'rgba(120,130,140,.6)'; x.lineWidth = 1.5 * f; x.beginPath(); x.moveTo(ub, H * .22); x.lineTo(ub - 40 * f, fl); x.moveTo(ub + 220 * f, H * .3); x.lineTo(ub + 260 * f, fl); x.stroke();
+    x.fillStyle = '#2f64a3'; x.fillRect(ub - 30 * f, fl - 10 * f, 290 * f, 12 * f);
+    const bx0 = W * .6, bx1 = Math.min(W - 20 * f, bx0 + 420 * f), by = fl - H * .1;
+    x.fillStyle = '#b8a07a'; x.fillRect(bx0, by - 9 * f, bx1 - bx0, 14 * f); x.fillStyle = 'rgba(255,255,255,.25)'; x.fillRect(bx0, by - 9 * f, bx1 - bx0, 3 * f);
+    x.strokeStyle = '#8f98a2'; x.lineWidth = 5 * f; x.beginPath(); for (const px of [bx0 + 40 * f, bx1 - 40 * f]) { x.moveTo(px, by + 5 * f); x.lineTo(px - 18 * f, fl); x.moveTo(px, by + 5 * f); x.lineTo(px + 18 * f, fl); } x.stroke();
+    for (let i = 0; i < 4; i++) { x.fillStyle = ['#2f64a3', '#d24d57', '#2f64a3', '#3f7fc4'][i]; x.fillRect(W * .86 - i * 3 * f, fl - (i + 1) * 13 * f, W * .16, 12 * f); }
+    // foam pit in the corner: a field of colored cubes
+    for (let i = 0; i < 70; i++) { x.fillStyle = ['#e85d75', '#f2c14e', '#4aa3df', '#5cbf8a', '#ffffff'][i % 5]; x.fillRect(W * .02 + r() * W * .2, fl - 6 * f - r() * 14 * f, 10 * f, 10 * f); }
+    // gym floor beyond the mat
+    g = x.createLinearGradient(0, yW, 0, yW + H * .06); g.addColorStop(0, '#b9b2a6'); g.addColorStop(1, '#a89f92');
+    x.fillStyle = g; x.fillRect(0, yW, W, H - yW);
+  }
+  function drawSpringFloor(x, W, H, yC, fy) {
+    // the competition floor: blue carpet, a white boundary line, faint seams running toward us
+    let g = x.createLinearGradient(0, yC, 0, H); g.addColorStop(0, '#2c64ab'); g.addColorStop(.35, '#3573bd'); g.addColorStop(1, '#2a5d9f');
+    x.fillStyle = g; x.fillRect(0, yC, W, H - yC);
+    x.fillStyle = '#f4f6f8'; x.fillRect(0, yC + (fy - yC) * .12, W, Math.max(3, (fy - yC) * .05));
+    x.strokeStyle = 'rgba(255,255,255,.05)'; x.lineWidth = 1;
+    for (let i = -12; i <= 12; i++) { x.beginPath(); x.moveTo(W / 2 + i * W * .04, yC); x.lineTo(W / 2 + i * W * .18, H); x.stroke(); }
+    for (let i = 0; i < 2600; i++) { const yy = yC + Math.random() ** 1.4 * (H - yC); x.fillStyle = Math.random() < .5 ? 'rgba(255,255,255,.05)' : 'rgba(10,30,70,.07)'; x.fillRect(Math.random() * W, yy, 1.4, 1.4); }
+    // the light from above, pooled where she performs
+    g = x.createRadialGradient(W * .5, fy, 0, W * .5, fy, Math.max(W, H) * .45); g.addColorStop(0, 'rgba(255,255,255,.16)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, yC, W, H - yC);
+  }
+
+  async function gymnastics(host, { launch }) {
+    const W = host.clientWidth, H = host.clientHeight, r = rng(7), GY = window.GYM, GD = window.GYMDRAW;
+    if (!GY || !GD) return;
+    const T = launch
+      ? { dark: [0, .2], lights: [.18, .3, .42], start: .3, from: -.7, words: 4.95, end: 6.3 }
+      : { dark: [.1, .65], lights: [.8, 1.15, 1.5], start: 1.45, from: -1.5, words: 7.05, end: 8.7 };
+    const old = oldLayers(host);
+    const BLACK = layer(host, 20, 'opacity:0');
+    BLACK.x.fillStyle = '#0d1420'; BLACK.x.fillRect(0, 0, W, H);
+    // background and floor are drawn wider than the screen so the camera can follow her (background slower: parallax)
+    const wide = (z, m, res = 1) => { const c = document.createElement('canvas'), d = DPR * res;
+      c.style.cssText = `position:absolute;left:${-m}px;top:0;width:${W + m}px;height:${H}px;z-index:${z};pointer-events:none;opacity:0;will-change:transform`;
+      c.width = Math.round((W + m) * d); c.height = Math.round(H * d); const x = c.getContext('2d'); x.scale(d, d); host.append(c); return { c, x, w: W + m }; };
+    const GYMN = layer(host, 23, 'opacity:0'), FX = layer(host, 24);
+    const words = wordsEl(host, 25, `<div style="font:italic 800 clamp(36px,10vw,66px)/1 Montserrat,'Nunito',system-ui,sans-serif;letter-spacing:-.01em;color:#1d4f8f;text-shadow:0 0 3px #fff,0 0 18px rgba(255,255,255,.95),0 0 40px rgba(255,255,255,.8)">Spencer Family</div>
+      <div style="margin-top:12px;font:800 clamp(13px,3.6vw,20px)/1 Nunito,system-ui,sans-serif;letter-spacing:.46em;color:#3c7fc8;text-shadow:0 0 10px #fff,0 0 20px rgba(255,255,255,.9)">FOOD STORAGE</div>`,
+      'top:calc(7vh + env(safe-area-inset-top));transform:translateY(10px);transition:opacity .9s ease,transform .9s ease;');
+
+    // how big she is, and the camera that follows her
+    const yW = H * .5, fy = H * .83, yC = H * .6;
+    // run the routine once ahead of time: how wide she gets at most, how tall, and where the camera will travel
+    const span = o => { const xs = [o.hip, o.sh, o.crown, o.a.toe, o.b.toe, o.a.heel, o.b.heel, o.n.tip, o.f.tip].map(p => p.x); return [Math.min(...xs), Math.max(...xs)]; };
+    const pre = GY.solver(); let wmax = 0, ymax = 0, cmin = 1e9, cmax = -1e9;
+    for (let gt = T.from; gt <= 4.6; gt += 1 / 60) {
+      const { root, o } = pre(GY.evalPose(gt)), [lo, hi] = span(o);
+      wmax = Math.max(wmax, hi - lo); cmin = Math.min(cmin, root.x + (lo + hi) / 2); cmax = Math.max(cmax, root.x + (lo + hi) / 2);
+      for (const p of [o.crown, o.n.tip, o.f.tip]) ymax = Math.max(ymax, root.y + p.y);
+    }
+    const S = Math.min(H * .46, W * .86 / wmax, (fy - H * .05) / ymax);
+    const mF = Math.ceil((cmax - cmin) * S + 40), mB = Math.ceil((cmax - cmin) * S * .45 + 40);
+    const BG = wide(21, mB, .45), FLOOR = wide(22, mF);
+    drawGymBG(BG.x, BG.w, H, yW, r);
+    drawSpringFloor(FLOOR.x, FLOOR.w, H, yC, fy);
+    let cam = null;
+    const dust = Array.from({ length: 70 }, () => ({ x: r() * W, y: H * (.1 + r() * .6), vx: 3 + r() * 8, vy: -2 + r() * 4, s: .6 + r() * 1.6, ph: r() * TAU }));
+    const puffs = [];
+    const nL = Math.max(3, Math.round(W / 260)), lamps = Array.from({ length: nL }, (_, i) => ({ x: W * (i + .5) / nL, y: H * .035 }));
+    // the big gym lights: each one clunks on, flickers, then warms up
+    const lightOf = (t, i) => { const li = T.lights[Math.min(i, 2)] + (i > 2 ? (i - 2) * .06 : 0), d = t - li;
+      return d < 0 ? 0 : d < .05 ? 1 : d < .1 ? .25 : Math.min(1, .7 + (d - .1) * 1.4); };
+    const level = t => (lightOf(t, 0) + lightOf(t, 1) + lightOf(t, 2)) / 3;
+
+    const solve = GY.solver(); let braid = null, lastT = null, prevC = null;
+    await run(host, t => {
+      // flowers fade into the dark, then the gym appears under its lights
+      BLACK.c.style.opacity = E.io(seg(t, T.dark[0], T.dark[1]));
+      if (t > T.dark[1]) hideOld(old);
+      const lv = level(t);
+      BG.c.style.opacity = lv; FLOOR.c.style.opacity = lv; GYMN.c.style.opacity = Math.min(1, lv * 1.05);
+
+      // FX: lamp glows, window light, chalk dust, little puffs where hands and feet land
+      const fx = FX.x; fx.clearRect(0, 0, W, H);
+      lamps.forEach((l, i) => { const on = lightOf(t, i); if (!on) return;
+        const gg = fx.createRadialGradient(l.x, l.y, 0, l.x, l.y, H * .16); gg.addColorStop(0, `rgba(255,252,235,${.9 * on})`); gg.addColorStop(.12, `rgba(255,248,220,${.45 * on})`); gg.addColorStop(1, 'rgba(255,248,220,0)');
+        fx.fillStyle = gg; fx.fillRect(l.x - H * .16, 0, H * .32, H * .2);
+        fx.fillStyle = `rgba(255,255,250,${on})`; fx.beginPath(); fx.ellipse(l.x, l.y, 16, 6, 0, 0, TAU); fx.fill(); });
+      if (lv > .05) {
+        fx.globalAlpha = lv * .5;
+        const sh = fx.createLinearGradient(0, H * .1, W * .4, H * .8); sh.addColorStop(0, 'rgba(255,255,245,.22)'); sh.addColorStop(1, 'rgba(255,255,245,0)');
+        fx.fillStyle = sh; fx.beginPath(); fx.moveTo(W * .1, H * .1); fx.lineTo(W * .32, H * .1); fx.lineTo(W * .75, H * .85); fx.lineTo(W * .4, H * .85); fx.closePath(); fx.fill();
+        fx.globalAlpha = lv;
+        for (const d of dust) { const px = (d.x + d.vx * t) % W, py = d.y + d.vy * t + Math.sin(t * .9 + d.ph) * 6; fx.fillStyle = 'rgba(255,255,255,.55)'; fx.beginPath(); fx.arc(px, py, d.s, 0, TAU); fx.fill(); }
+        fx.globalAlpha = 1;
+      }
+
+      // the gymnast
+      const gt = Math.min(4.6, T.from + Math.max(0, t - T.start)), dt = lastT == null ? 1 / 60 : Math.min(.05, Math.max(.001, t - lastT)); lastT = t;
+      const pose = GY.evalPose(gt), { root, o: rel } = solve(pose);
+      const o = {}; for (const k in rel) o[k] = rel[k].x !== undefined ? { x: rel[k].x + root.x, y: rel[k].y + root.y } : Object.fromEntries(Object.entries(rel[k]).map(([a, b]) => [a, { x: b.x + root.x, y: b.y + root.y }]));
+      const an = GD.braidAnchor(o, pose);
+      if (!braid) { braid = GD.braidInit(o); for (let i = 0; i < 90; i++) GD.braidStep(braid, an.root, an.down, o, 1 / 60); }
+      GD.braidStep(braid, an.root, an.down, o, dt);
+      const g = GYMN.x; g.clearRect(0, 0, W, H);
+      // the camera eases along after her; the floor moves with it, the far wall less
+      const [lo, hi] = span(o), target = (lo + hi) / 2;
+      if (cam == null) cam = target; else cam += (target - cam) * (1 - Math.exp(-dt * 2.2));
+      const ox = W / 2 - S * cam, shift = (cmax - cam) * S;
+      FLOOR.c.style.transform = `translateX(${shift}px)`; BG.c.style.transform = `translateX(${shift * .45}px)`;
+      // her shadow on the mat
+      g.fillStyle = 'rgba(10,25,55,.28)'; g.beginPath(); g.ellipse(ox + S * (lo + hi) / 2, fy + 4, S * (hi - lo) / 2 + 10, Math.max(5, S * .025), 0, 0, TAU); g.fill();
+      g.save(); g.translate(ox, fy); g.scale(S, -S);
+      GD.drawGymnast(g, { o, pose, braid, look: { smile: gt > 3.6 ? 1 : 0 } });
+      g.restore();
+      // chalk puffs when hands or feet land
+      const c = pose.c;
+      if (prevC) for (const [k, p] of [['H', o.n.palm], ['A', o.a.ball], ['P', o.hip]]) if ((c[k] || 0) > .5 && (prevC[k] || 0) <= .5)
+        for (let i = 0; i < 9; i++) puffs.push({ x: p.x + (r() - .5) * .06, y: fy, vx: (r() - .5) * S * .5, vy: -S * (.08 + r() * .2), s: S * (.01 + r() * .015), born: t });
+      prevC = c;
+      for (const pf of puffs) { const a = t - pf.born; if (a > 1.4) continue;
+        const px = ox + pf.x * S + pf.vx * a * .5, py = pf.y + pf.vy * a * (1 - a * .35), rr = pf.s * (1 + a * 2.2), al = .32 * (1 - a / 1.4) ** 1.5;
+        const pg = g.createRadialGradient(px, py, 0, px, py, rr); pg.addColorStop(0, `rgba(255,255,255,${al})`); pg.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = pg; g.beginPath(); g.arc(px, py, rr, 0, TAU); g.fill(); }
+
+      if (t > T.words) { words.style.opacity = 1; words.style.transform = 'none'; }
+      return t < T.end;
+    });
+  }
+
   window.SFFS_REVEAL = {
-    play(kind, host, opts = {}) { host.__skip = false; return (kind === 'armory' ? armory : equestrian)(host, opts); }
+    play(kind, host, opts = {}) { host.__skip = false; return ({ armory, equestrian, gymnastics }[kind] || equestrian)(host, opts); }
   };
 })();

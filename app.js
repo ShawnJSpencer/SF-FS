@@ -1,7 +1,7 @@
 // SF-FS · Spencer Family Food Storage
 const CFG = window.SFFS_CONFIG || {};
 const SEED = window.SFFS_SEED;
-const VERSION = '2.5.0';
+const VERSION = '2.6.0';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,8 +41,8 @@ function setStyle(id, colorId) {
 applyLook();
 
 /* ───────────── Opening animation ─────────────
-   Tap to skip. Hold ONE finger until it finishes for the Armory reveal, TWO fingers for Equestrian
-   (on a computer: hold the mouse button, or Shift + hold). */
+   Tap to skip. Hold ONE finger until it finishes for the Armory reveal, TWO fingers for Equestrian,
+   THREE for Gymnastics (on a computer: hold the mouse button; Shift + hold = two, Option/Alt + hold = three). */
 // While the opening animation shows, the status bar uses its color; afterwards, the page color.
 function endSplashColors() {
   document.documentElement.classList.remove('splashing');
@@ -89,7 +89,7 @@ function runSplash() {
   sp.addEventListener('touchstart', e => { fingers = e.touches.length; downAt = Date.now(); e.preventDefault(); }, { passive: false });
   sp.addEventListener('touchend', e => { fingers = e.touches.length; if (!fingers && Date.now() - downAt < 350) skip(); });
   sp.addEventListener('touchcancel', e => { fingers = e.touches.length; });
-  sp.addEventListener('mousedown', e => { mouse = e.shiftKey ? 2 : 1; downAt = Date.now(); });
+  sp.addEventListener('mousedown', e => { mouse = e.altKey ? 3 : e.shiftKey ? 2 : 1; downAt = Date.now(); });
   sp.addEventListener('mouseup', () => { const quick = Date.now() - downAt < 350; mouse = 0; if (quick) skip(); });
   sp.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -103,10 +103,10 @@ function runSplash() {
     if (st.reveal && window.SFFS_REVEAL) await reveal(st.reveal, true);
     else await new Promise(res => { skipMain = res; particleSplash(sp, st).then(res); });
     if (done) return;
-    // still holding? one finger → Armory, two → Equestrian
+    // still holding? one finger → Armory, two → Equestrian, three → Gymnastics
     const held = Math.max(fingers, mouse);
-    if ((held === 1 || held === 2) && window.SFFS_REVEAL) {
-      const kind = held === 1 ? 'armory' : 'equestrian';
+    if (held >= 1 && held <= 3 && window.SFFS_REVEAL) {
+      const kind = ['armory', 'equestrian', 'gymnastics'][held - 1];
       await reveal(kind, false);
       const unlocked = dev.get('unlocked', []);
       const first = !unlocked.includes(kind);

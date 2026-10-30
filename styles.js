@@ -138,6 +138,33 @@
     return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 135">${body}</svg>`)}")`;
   }
 
+  /* Medals for the Gymnastics menu: 1st gold, 2nd silver, 3rd bronze, 4th steel blue, each hanging from a
+     striped ribbon in the color choice's colors. Ribbon at the top of the petal, which points outward. */
+  const METALS = [['#fff4bf', '#e3b53b', '#94660f', '#5e4106'], ['#ffffff', '#cdd3da', '#7b8591', '#454d58'], ['#ffd8b4', '#c67d40', '#7a4119', '#4e260b'], ['#eef4fb', '#9fb6cf', '#57708d', '#33465c']];
+  const ORD = ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH'];
+  function medalPetal(place, accent, accent2) {
+    const [hi, mid, lo, ink] = METALS[Math.min(place, METALS.length - 1)], cx = 50, cy = 86;
+    const strap = (x0, x1, x2, x3) => `<path d="M${x0} 0 L${x1} 0 L${x2} 50 L${x3} 50 Z"`;
+    const leaves = [...Array(7)].map((_, i) => { const a = (205 + i * 18) * Math.PI / 180, b = (335 - i * 18) * Math.PI / 180, r = 26;
+      return [a, b].map(t => `<ellipse cx="${(cx + Math.cos(t) * r).toFixed(1)}" cy="${(cy - Math.sin(t) * r).toFixed(1)}" rx="2.2" ry="4.4" transform="rotate(${(-t * 180 / Math.PI + 90).toFixed(0)} ${(cx + Math.cos(t) * r).toFixed(1)} ${(cy - Math.sin(t) * r).toFixed(1)})"/>`).join(''); }).join('');
+    const body = `<defs>
+      <linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".45" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
+      <linearGradient id="m2" x1="1" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${hi}"/><stop offset=".5" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
+      <radialGradient id="sh" cx="35%" cy="28%" r="70%"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      <linearGradient id="rb"><stop offset="0" stop-color="${accent}"/><stop offset=".3" stop-color="${accent}"/><stop offset=".3" stop-color="#ffffff"/><stop offset=".42" stop-color="#ffffff"/><stop offset=".42" stop-color="${accent2}"/><stop offset=".58" stop-color="${accent2}"/><stop offset=".58" stop-color="#ffffff"/><stop offset=".7" stop-color="#ffffff"/><stop offset=".7" stop-color="${accent}"/><stop offset="1" stop-color="${accent}"/></linearGradient></defs>
+      ${strap(14, 36, 58, 46)} fill="url(#rb)"/>${strap(86, 64, 42, 54)} fill="url(#rb)"/>
+      <path d="M36 0 L58 50 L54 50 L64 0 Z" fill="#000" opacity=".08"/>
+      <circle cx="50" cy="49.5" r="5" fill="none" stroke="${lo}" stroke-width="3"/>
+      <circle cx="${cx}" cy="${cy + 1.5}" r="38" fill="#000" opacity=".18"/>
+      <circle cx="${cx}" cy="${cy}" r="38" fill="url(#m)"/>
+      <circle cx="${cx}" cy="${cy}" r="32.5" fill="url(#m2)"/>
+      <circle cx="${cx}" cy="${cy}" r="30.5" fill="url(#m)" opacity=".85"/>
+      <g fill="${lo}" opacity=".3">${leaves}</g>
+      <circle cx="${cx}" cy="${cy}" r="38" fill="url(#sh)"/>
+      <text x="${cx}" y="${cy + 30}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-weight="800" font-size="8.5" letter-spacing=".8" fill="${ink}" opacity=".85">${ORD[place] || ''}</text>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 132">${body}</svg>`)}")`;
+  }
+
   /* ── Art (logo · no-photo picture · menu button · big opening art) ── */
   const ART = {
     tulips: svg('0 0 64 64', `<circle cx="32" cy="32" r="31" style="fill:var(--soft)"/>
@@ -170,6 +197,18 @@
       <g fill="#fff" opacity=".85"><circle cx="6.4" cy="9.4" r=".75"/><circle cx="5.7" cy="13.2" r=".75"/><circle cx="6.5" cy="17" r=".75"/><circle cx="17.6" cy="9.4" r=".75"/><circle cx="18.3" cy="13.2" r=".75"/><circle cx="17.5" cy="17" r=".75"/></g>`),
     horseshoeMenu: svg('0 0 32 32', `<g class="mflower"><path d="M9 28 C 4.6 21.5, 4.3 12, 9 7 C 13.4 2.2, 18.6 2.2, 23 7 C 27.7 12, 27.4 21.5, 23 28 M12.6 28 C 9.4 22, 9 14, 12 10 C 14.2 7.4, 17.8 7.4, 20 10 C 23 14, 22.6 22, 19.4 28"/>
       <circle cx="8" cy="13" r=".9"/><circle cx="7.6" cy="18" r=".9"/><circle cx="24" cy="13" r=".9"/><circle cx="24.4" cy="18" r=".9"/></g>`),
+    // Gymnastics: a gymnast in a split leap with her braid flying, a ribbon swirl under her
+    gymLogo: svg('0 0 64 64', `<circle cx="32" cy="32" r="31" style="fill:var(--soft)"/>
+      <path d="M8 49 C 20 40, 36 58, 56 45" fill="none" style="stroke:var(--accent)" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M29.4 15.5 C 25.5 17, 23.5 21, 21.5 25.5" fill="none" stroke="#e1bd5e" stroke-width="2.6" stroke-linecap="round"/>
+      <g fill="none" style="stroke:var(--ink)" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M33.2 21.5 L31.4 33.5" stroke-width="5.6"/>
+        <path d="M33.3 22.5 L26.5 11.2 M33.3 22.5 L41.6 11.6" stroke-width="2.6"/>
+        <path d="M31.4 33.5 L19.5 36.5 L11.5 36.8 M31.4 33.5 L42 30 L52.5 25.5" stroke-width="3.6"/></g>
+      <circle cx="33.4" cy="15.6" r="4.5" style="fill:var(--ink)"/>`),
+    medal: svg('0 0 24 24', `<path d="M7 2 L10.5 2 L13 9 L10.5 10 Z M17 2 L13.5 2 L11 9 L13.5 10 Z" fill="currentColor" opacity=".6"/>
+      <circle cx="12" cy="15.5" r="6.5" fill="currentColor"/><path d="M12 11.8 L13.1 14.2 L15.6 14.4 L13.7 16 L14.3 18.5 L12 17.1 L9.7 18.5 L10.3 16 L8.4 14.4 L10.9 14.2 Z" fill="#fff" opacity=".9"/>`),
+    medalMenu: svg('0 0 32 32', `<g class="mflower"><path d="M9.5 3 L13.5 3 L17 12 M22.5 3 L18.5 3 L15 12"/><circle cx="16" cy="20" r="7.5"/><path d="M16 16.2 L17.2 18.8 L19.9 19 L17.8 20.7 L18.5 23.4 L16 21.9 L13.5 23.4 L14.2 20.7 L12.1 19 L14.8 18.8 Z"/></g>`),
     // Chalkboard
     chalkJar: svg('0 0 64 64', `<g fill="none" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--ink)" stroke-width="2.3" stroke-dasharray="1 .01">
       <path d="M21 14 C 21 11, 43 11, 43 14 L43 18 C 43 20, 21 20, 21 18 Z" style="stroke:var(--accent)"/><path d="M22.5 19.5 C 18 23, 16 27, 16.5 33 L17 51 C 17.2 55.5, 46.8 55.5, 47 51 L47.5 33 C 48 27, 46 23, 41.5 19.5"/>
@@ -289,7 +328,16 @@
         ['hunter', 'Hunter green', T('#f4f3ec', '#fdfdf8', '#1f2a22', '#7d887f', '#2f5a3a', '#c8a95a', '#e2e6da', '#2f5a3a', '#a8322d', '#a9cfe3')],
         ['navygold', 'Navy & gold', T('#f5f3ee', '#fffdf8', '#1b2338', '#7c8297', '#1f3a6b', '#c9a24d', '#e3e5ec', '#4f7a4a', '#b0303a', '#a3c4e0')],
         ['bay', 'Bay & tan', T('#f6f0e6', '#fffaf2', '#3a2416', '#957b66', '#8a4b26', '#d9b88a', '#efe2cf', '#5b7a43', '#a8322d', '#b7d4e6')]],
-      logo: ART.horseHead, ph: ART.horseshoe, menu: ART.horseshoeMenu, petal: 'rosette', reveal: 'equestrian' }
+      logo: ART.horseHead, ph: ART.horseshoe, menu: ART.horseshoeMenu, petal: 'rosette', reveal: 'equestrian' },
+
+    { id: 'gymnastics', name: 'Gymnastics', blurb: 'Spring floor, chalk and medals', secret: 3,
+      fonts: { d: "'Montserrat','Nunito',system-ui,sans-serif", b: "'Nunito',system-ui,sans-serif", i: 'italic' },
+      tex: `${noise(.9, .045, '.2 .4 .7', 2)},repeating-linear-gradient(45deg,rgba(74,163,223,.025) 0 2px,transparent 2px 7px)`, texSize: '220px 220px,auto',
+      colors: [['skyleo', 'Light blue leotard', T('#f3f8fc', '#ffffff', '#1d3550', '#7b8ea4', '#3f97d6', '#a8d8f5', '#e2f0fa', '#4f9a68', '#d24d6b', '#9fd6f6')],
+        ['goldmedal', 'Gold medal', T('#fbf7ee', '#fffdf8', '#2b2a3a', '#8a8577', '#c08a1e', '#ecd38c', '#f4ead2', '#5a8f5a', '#c4463c', '#e9cf86')],
+        ['pinkleo', 'Pink leotard', T('#fdf5f8', '#ffffff', '#3a2133', '#9a7f90', '#d9578b', '#f5bdd3', '#fbe4ee', '#5a9a6b', '#c43b4c', '#f5b6cf')],
+        ['team', 'Team navy & silver', T('#f2f4f8', '#ffffff', '#16233b', '#7a8599', '#1f3f7a', '#b9c3d3', '#e3e8f1', '#4f8a64', '#c23a44', '#a9b9d6')]],
+      logo: ART.gymLogo, ph: ART.medal, menu: ART.medalMenu, petal: 'medal', reveal: 'gymnastics' }
   ];
   const byId = id => STYLES.find(s => s.id === id) || STYLES[0];
 
@@ -322,10 +370,19 @@
   }
   // Equestrian rosettes, in each color choice's colors
   for (const [cid, , tok] of byId('equestrian').colors) css += `[data-style="equestrian"][data-theme="${cid}"] .petal{background-image:${rosette(tok.accent, tok.accent2, tok.card)}}\n`;
+  // Gymnastics medals: gold, silver, bronze, 4th — ribbons in each color choice's colors
+  for (const [cid, , tok] of byId('gymnastics').colors) for (let i = 0; i < 6; i++)
+    css += `[data-style="gymnastics"][data-theme="${cid}"] .petal:nth-of-type(${i + 1}){background-image:${medalPetal(i, tok.accent, tok.accent2)}}\n`;
   // menu petals, per style
   css += `
 [data-style="armory"] .bloom{--bloom-extra:62}
 [data-style="equestrian"] .bloom{--bloom-extra:16}
+[data-style="gymnastics"] .bloom{--bloom-extra:34}
+[data-style="gymnastics"] .petal{width:92px;height:121px;margin:-79px 0 0 -46px;transform-origin:46px 79px;padding:0;border:0;border-radius:0;box-shadow:none;
+  background:center top/100% auto no-repeat;filter:drop-shadow(0 7px 8px rgba(20,40,70,.3));display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+[data-style="gymnastics"] .petal .pc{margin-top:58px;gap:1px}
+[data-style="gymnastics"] .petal svg{width:21px;height:21px;stroke:#2a2a33}
+[data-style="gymnastics"] .petal b{font-size:10.5px;color:#22222b;text-shadow:0 1px 0 rgba(255,255,255,.55)}
 [data-style="armory"] .petal{width:76px;height:196px;margin:-98px 0 0 -38px;padding:0;border:0;box-shadow:none;background:none;border-radius:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
 [data-style="armory"] .petal::before{content:"";position:absolute;left:50%;top:0;width:24px;height:153px;margin-left:-12px;background:${cartURI} center/contain no-repeat;
   filter:drop-shadow(2px 7px 5px rgba(0,0,0,.65)) drop-shadow(0 0 1px rgba(0,0,0,.8))}
