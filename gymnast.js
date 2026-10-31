@@ -99,10 +99,14 @@
   K(1.38, { B: 1, H: 1 }, { ...sp(165, 215, 265, 275, 283), ...legA(96, 98, 102), ...legB(-60, -72, -8), ...arms([272, 272, 360], [270, 270, 360]) }, { fitH: 1 });
   K(1.85, { H: 1 }, { ...sp(262, 268, 272, 280, 288), ...legA(198, 200, 205), ...legB(20, 22, 28), ...arms([270, 270, 360], [268, 268, 360]) });
   K(2.3,  { H: 1, A: 1 }, { ...sp(318, 336, 350, 356, 366), ...legA(250, 250, 345), ...legB(62, 64, 70), ...arms([286, 286, 360], [284, 284, 360]) }, { fitA: 1 });
-  K(2.8,  { A: 1 }, { ...sp(438, 446, 452, 455, 458), ...legA(268, 268, 360), ...legB(42, 44, 50), ...arms([440, 444, 448], [435, 439, 443]) });
-  K(3.3,  { P: 1 }, { ...sp(450, 452, 455, 458, 460), ...legA(205, 198, 188), ...legB(-12, -10, 5), ...arms([470, 474, 478], [462, 466, 470]) });
-  K(3.8,  { P: 1 }, { ...sp(452, 453, 458, 462, 468), ...legA(180, 180, 185), ...legB(0, 0, 15), ...arms([478, 480, 485], [466, 468, 472]) });
-  K(5.2,  { P: 1 }, { ...sp(452, 453, 458, 462, 468), ...legA(180, 180, 185), ...legB(0, 0, 15), ...arms([478, 480, 485], [466, 468, 472]) }, { hold: 1 });
+  // after the first foot lands she stays folded low: the landing leg slides forward under her to become
+  // the front leg, the trailing leg keeps rotating over the top and down behind her, then her chest lifts
+  K(2.5,  { A: 1 }, { ...sp(330, 346, 358, 364, 372), ...legA(256, 256, 350), ...legB(92, 94, 100), ...arms([318, 322, 365], [314, 318, 362]) });
+  K(2.8,  { P: 1 }, { ...sp(356, 368, 376, 380, 386), ...legA(296, 300, 330), ...legB(132, 134, 140), ...arms([372, 374, 376], [366, 368, 370]) });
+  K(3.1,  { P: 1 }, { ...sp(380, 392, 402, 406, 410), ...legA(336, 338, 362), ...legB(166, 167, 174), ...arms([400, 404, 408], [392, 396, 400]) });
+  K(3.45, { P: 1 }, { ...sp(430, 442, 452, 456, 460), ...legA(358, 358, 374), ...legB(178, 178, 184), ...arms([450, 456, 462], [440, 446, 452]) });
+  K(3.8,  { P: 1 }, { ...sp(452, 453, 458, 462, 468), ...legA(360, 360, 375), ...legB(180, 180, 185), ...arms([478, 480, 485], [466, 468, 472]) });
+  K(5.2,  { P: 1 }, { ...sp(452, 453, 458, 462, 468), ...legA(360, 360, 375), ...legB(180, 180, 185), ...arms([478, 480, 485], [466, 468, 472]) }, { hold: 1 });
   // make the planted hands and feet truly reach the floor
   for (const k of GYM.KEYS) {
     if (k.fitH) GYM.fit(k, [['bT', 0]], -75, -20, o => Math.min(o.n.palm.y, o.f.palm.y) - o.b.ball.y);   // bend the support knee until the hands reach
@@ -110,7 +114,7 @@
   }
   // who's on the floor, when
   GYM.CONTACTS.push({ t: -3, c: { B: 1 } }, { t: 1.30, c: { B: 1 } }, { t: 1.38, c: { B: 1, H: 1 } }, { t: 1.48, c: { H: 1 } },
-    { t: 2.24, c: { H: 1 } }, { t: 2.3, c: { H: 1, A: 1 } }, { t: 2.37, c: { A: 1 } }, { t: 2.9, c: { A: 1 } }, { t: 3.2, c: { P: 1 } }, { t: 9, c: { P: 1 } });
+    { t: 2.24, c: { H: 1 } }, { t: 2.3, c: { H: 1, A: 1 } }, { t: 2.4, c: { H: 1, A: 1 } }, { t: 2.48, c: { A: 1 } }, { t: 2.55, c: { A: 1 } }, { t: 2.75, c: { P: 1 } }, { t: 9, c: { P: 1 } });
 })(window.GYM);
 
 // Drawing the gymnast. Everything in rig units (her height = 1, y up); the caller sets the transform.
@@ -278,67 +282,91 @@
   }
 
   /* the braid: a chain that swings with gravity and lies along her back */
-  function braidInit(o, n = 12, len = .25) {
+  function braidInit(o, n = 16, len = .27) {
     const P = []; const root = add(o.nk, { x: -.06, y: .03 });
-    for (let i = 0; i < n; i++) P.push({ x: root.x - .01, y: root.y - i * len / (n - 1), px: root.x - .01, py: root.y - i * len / (n - 1) });
+    for (let i = 0; i < n; i++) P.push({ x: root.x - .012, y: root.y - i * len / (n - 1), px: root.x - .012, py: root.y - i * len / (n - 1) });
     return { P, seg: len / (n - 1) };
   }
+  // A braid is heavy, soft and a little springy near the head: air drag, stiffness that fades toward
+  // the tail, the first links held in the direction it leaves the head, and her back as a wall.
   function braidStep(b, rootPos, down, o, dt) {
-    const steps = Math.max(1, Math.min(12, Math.round(dt / (1 / 240)))), h = dt / steps, g = 6.3;
-    const caps = [[o.hip, o.waist, .05], [o.waist, o.chest, .052], [o.chest, o.sh, .056], [o.sh, o.nk, .035]];
+    const steps = Math.max(1, Math.min(14, Math.round(dt / (1 / 240)))), h = dt / steps, g = 6.3, n = b.P.length;
+    const caps = [[o.hip, o.waist, .066], [o.waist, o.chest, .066], [o.chest, o.sh, .07], [o.sh, o.nk, .045]];
     for (let s = 0; s < steps; s++) {
       const P = b.P; P[0].x = rootPos.x; P[0].y = rootPos.y;
-      for (let i = 1; i < P.length; i++) { const p = P[i], vx = (p.x - p.px) * .955, vy = (p.y - p.py) * .955; p.px = p.x; p.py = p.y; p.x += vx; p.y += vy - g * h * h; }
-      for (let it = 0; it < 6; it++) {
-        // the first link leaves the head heading down the back of the neck
-        const t1 = { x: P[0].x + down.x * b.seg, y: P[0].y + down.y * b.seg }; P[1].x += (t1.x - P[1].x) * .5; P[1].y += (t1.y - P[1].y) * .5;
-        for (let i = 1; i < P.length; i++) { const a = P[i - 1], c = P[i], dx = c.x - a.x, dy = c.y - a.y, dd = Math.hypot(dx, dy) || 1e-6, k = (dd - b.seg) / dd;
+      for (let i = 1; i < n; i++) { const p = P[i], drag = .968 + .006 * (i / n), vx = (p.x - p.px) * drag, vy = (p.y - p.py) * drag;
+        p.px = p.x; p.py = p.y; p.x += vx; p.y += vy - g * h * h; }
+      for (let it = 0; it < 7; it++) {
+        // the first links leave the head heading down the back of the neck
+        for (const [k, w] of [[1, .4], [2, .1]]) { const t = { x: P[0].x + down.x * b.seg * k, y: P[0].y + down.y * b.seg * k }; P[k].x += (t.x - P[k].x) * w; P[k].y += (t.y - P[k].y) * w; }
+        for (let i = 1; i < n; i++) { const a = P[i - 1], c = P[i], dx = c.x - a.x, dy = c.y - a.y, dd = Math.hypot(dx, dy) || 1e-6, k = (dd - b.seg) / dd;
           if (i === 1) { c.x -= dx * k; c.y -= dy * k; } else { a.x += dx * k * .5; a.y += dy * k * .5; c.x -= dx * k * .5; c.y -= dy * k * .5; } }
-        // a little stiffness, and keep out of her back and off the floor
-        for (let i = 2; i < P.length; i++) { const a = P[i - 2], c = P[i], mx = (a.x + c.x) / 2, my = (a.y + c.y) / 2, m = P[i - 1]; m.x += (mx - m.x) * .06; m.y += (my - m.y) * .06; }
-        // her back is a wall the braid can't pass through: anything level with the torso stays behind it
-        for (let i = 1; i < P.length; i++) { const p = P[i];
+        // stiffer where it's thick near the head, looser toward the tail
+        for (let i = 2; i < n; i++) { const a = P[i - 2], c = P[i], m = P[i - 1], st = .11 * (1 - i / n) + .015; m.x += ((a.x + c.x) / 2 - m.x) * st; m.y += ((a.y + c.y) / 2 - m.y) * st; }
+        for (let i = 1; i < n; i++) { const p = P[i];
           for (const [A, B, r] of caps) { const ab = { x: B.x - A.x, y: B.y - A.y }, l = Math.hypot(ab.x, ab.y), d = { x: ab.x / l, y: ab.y / l }, nb = { x: -d.y, y: d.x };
+            // when her back faces up (face-down) the braid just slides off to the side of her; the wall fades
+            // back in as she rises, and pushing the braid never flings it (its momentum isn't changed)
+            const wall = Math.max(0, Math.min(1, (.6 - nb.y) / .3)); if (!wall) continue;
             const along = (p.x - A.x) * d.x + (p.y - A.y) * d.y; if (along < -.02 || along > l + .02) continue;
             const side = (p.x - A.x) * nb.x + (p.y - A.y) * nb.y;
-            if (side < r && side > -.12) { const k = r - side; p.x += nb.x * k; p.y += nb.y * k; } }
+            if (side < r && side > -.025) { const k = (r - side) * wall * .5; p.x += nb.x * k; p.y += nb.y * k; p.px += nb.x * k; p.py += nb.y * k; } }
           if (p.y < .012) p.y = .012; }
       }
     }
   }
-  function braidDraw(x, b, far) {
+  // the braid as hair: a soft tapered plait of three strands crossing, a blue tie, a loose tail and a few flyaways
+  function braidDraw(x, b) {
     const P = b.P, n = P.length;
-    const pts = P.map(p => ({ x: p.x, y: p.y }));
-    // the braid's body: alternating plaits along the chain, tapering to a tie and a little tail
-    x.lineCap = 'round';
-    const path = [];
-    for (let i = 0; i < n - 1; i++) for (let k = 0; k < 4; k++) path.push(lerpP(pts[i], pts[i + 1], k / 4));
-    path.push(pts[n - 1]);
-    const N = path.length, tieAt = Math.floor(N * .86);
-    for (let i = 0; i < tieAt; i++) {
-      const p = path[i], q = path[Math.min(N - 1, i + 1)], d = norm({ x: q.x - p.x, y: q.y - p.y }), nn = rot(d), w = .021 - .007 * i / tieAt, side = i % 2 ? 1 : -1;
-      if (i % 2) continue;
-      const c = { x: p.x + nn.x * side * w * .28, y: p.y + nn.y * side * w * .28 };
-      x.fillStyle = (i / 2) % 2 ? HAIR.base : HAIR.dark; x.beginPath(); x.ellipse(c.x, c.y, w * .62, w * .9, Math.atan2(d.y, d.x) + side * .5, 0, 7); x.fill();
-      x.strokeStyle = 'rgba(255,240,190,.6)'; x.lineWidth = .0022; x.beginPath(); x.ellipse(c.x, c.y, w * .45, w * .7, Math.atan2(d.y, d.x) + side * .5, -.6, .9); x.stroke();
+    const g = i => P[Math.max(0, Math.min(n - 1, i))];
+    const C = [];
+    for (let i = 0; i < n - 1; i++) for (let k = 0; k < 5; k++) { const u = k / 5, p0 = g(i - 1), p1 = g(i), p2 = g(i + 1), p3 = g(i + 2), u2 = u * u, u3 = u2 * u;
+      C.push({ x: .5 * (2 * p1.x + (-p0.x + p2.x) * u + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * u2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * u3),
+               y: .5 * (2 * p1.y + (-p0.y + p2.y) * u + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * u2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * u3) }); }
+    C.push({ x: P[n - 1].x, y: P[n - 1].y });
+    const S = [0]; for (let i = 1; i < C.length; i++) S.push(S[i - 1] + Math.hypot(C[i].x - C[i - 1].x, C[i].y - C[i - 1].y));
+    const total = S[S.length - 1], tieS = total * .82;
+    const at = s => { let i = 1; while (i < S.length - 1 && S[i] < s) i++; const k = (s - S[i - 1]) / ((S[i] - S[i - 1]) || 1), p = lerpP(C[i - 1], C[i], k), d = norm({ x: C[i].x - C[i - 1].x, y: C[i].y - C[i - 1].y }); return { p, d, n: rot(d) }; };
+    const wOf = s => .024 - .009 * Math.min(1, s / tieS) + .004 * Math.max(0, 1 - s / .03);
+    // body of the braid
+    const L = [], R = [];
+    for (let s = 0; s <= tieS + 1e-6; s += tieS / 24) { const { p, n: nn } = at(s), w = wOf(s) * (.92 + .08 * Math.sin(s / .017 * Math.PI)); L.push({ x: p.x + nn.x * w, y: p.y + nn.y * w }); R.push({ x: p.x - nn.x * w, y: p.y - nn.y * w }); }
+    const body = [...L, ...R.reverse()];
+    x.beginPath(); spath(x, body); x.fillStyle = HAIR.dark; x.fill();
+    // the plaits: lobes that alternate side to side, each crossing down toward the middle
+    x.save(); x.beginPath(); spath(x, body); x.clip();
+    const step = .016;
+    for (let s = .004, k = 0; s < tieS; s += step / 2, k++) {
+      const { p, d, n: nn } = at(s), w = wOf(s), sg = k % 2 ? 1 : -1, A = (u, v) => ({ x: p.x + d.x * u + nn.x * v * sg, y: p.y + d.y * u + nn.y * v * sg });
+      const lobe = [A(-step * .25, w * 1.05), A(step * .45, w * .9), A(step * 1.05, w * .05), A(step * .8, -w * .32), A(step * .2, w * .15)];
+      const lg = x.createLinearGradient(lobe[0].x, lobe[0].y, lobe[2].x, lobe[2].y); lg.addColorStop(0, HAIR.light); lg.addColorStop(.55, HAIR.base); lg.addColorStop(1, HAIR.dark);
+      x.beginPath(); spath(x, lobe); x.fillStyle = lg; x.fill();
+      x.strokeStyle = 'rgba(140,100,35,.55)'; x.lineWidth = .0022; x.beginPath(); spath(x, [lobe[2], lobe[3], lobe[4]], false); x.stroke();
+      x.strokeStyle = 'rgba(255,245,210,.55)'; x.lineWidth = .0014; x.beginPath(); spath(x, [A(0, w * .8), A(step * .4, w * .62), A(step * .8, w * .2)], false); x.stroke();
     }
-    // hair tie (light blue, to match) and the tail
-    const t0 = path[tieAt], t1 = path[N - 1], d = norm({ x: t1.x - t0.x, y: t1.y - t0.y }), nn = rot(d);
-    for (let i = 0; i < 9; i++) { const k = (i - 4) / 4; x.strokeStyle = i % 3 ? HAIR.base : HAIR.light; x.lineWidth = .0035;
-      x.beginPath(); x.moveTo(t0.x + nn.x * k * .008, t0.y + nn.y * k * .008); x.quadraticCurveTo(t0.x + d.x * .02 + nn.x * k * .014, t0.y + d.y * .02 + nn.y * k * .014, t1.x + d.x * .012 + nn.x * k * .016, t1.y + d.y * .012 + nn.y * k * .016); x.stroke(); }
-    x.fillStyle = '#6db6e8'; x.beginPath(); x.ellipse(t0.x, t0.y, .012, .009, Math.atan2(d.y, d.x), 0, 7); x.fill();
-    void far;
+    x.restore();
+    // a few flyaway hairs
+    x.lineCap = 'round'; x.strokeStyle = 'rgba(240,215,140,.6)'; x.lineWidth = .0012;
+    for (const [s0, sg, len] of [[.05, 1, .02], [.11, -1, .024], [.17, 1, .018]]) { if (s0 > tieS) continue; const { p, d, n: nn } = at(s0), w = wOf(s0);
+      x.beginPath(); x.moveTo(p.x + nn.x * w * sg, p.y + nn.y * w * sg); x.quadraticCurveTo(p.x + nn.x * (w + .01) * sg + d.x * len * .5, p.y + nn.y * (w + .01) * sg + d.y * len * .5, p.x + nn.x * (w + .006) * sg + d.x * len, p.y + nn.y * (w + .006) * sg + d.y * len); x.stroke(); }
+    // the tail below the tie: loose strands that fan a little and follow the braid's swing
+    const T = at(tieS);
+    for (let i = 0; i < 16; i++) { const v = (i / 15 - .5) * 2, len = (total - tieS) * (.85 + .3 * Math.abs(Math.sin(i * 2.3))), pts = [];
+      for (let k = 0; k <= 6; k++) { const s2 = Math.min(total, tieS + len * k / 6), q = at(s2), spread = .006 + .012 * k / 6; pts.push({ x: q.p.x + q.n.x * v * spread, y: q.p.y + q.n.y * v * spread }); }
+      x.strokeStyle = i % 4 === 0 ? HAIR.dark : i % 3 === 0 ? HAIR.light : HAIR.base; x.lineWidth = .0026 - .0008 * Math.abs(v); x.beginPath(); spath(x, pts, false); x.stroke(); }
+    // hair tie
+    x.fillStyle = '#5aa9e0'; x.beginPath(); x.ellipse(T.p.x, T.p.y, .008, .0125, Math.atan2(T.d.y, T.d.x), 0, 7); x.fill();
+    x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = .0015; x.beginPath(); x.ellipse(T.p.x, T.p.y, .005, .009, Math.atan2(T.d.y, T.d.x), -1, 1); x.stroke();
   }
-
   function drawGymnast(x, st) {
     const { o, pose, braid, look } = st;
     x.lineJoin = 'round';
     arm(x, o, o.sh, 'f', true);
+    braidDraw(x, braid);   // just behind her: down her back, or on the far side of her when it falls that way
     leg(x, o, o.hip, 'b', true);
     leg(x, o, o.hip, 'a', false);
     torso(x, o);
     const h = head(x, o, pose, look);
-    braidDraw(x, braid);
     arm(x, o, o.sh, 'n', false);
     return h;
   }
